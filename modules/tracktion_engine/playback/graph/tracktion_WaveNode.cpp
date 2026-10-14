@@ -742,7 +742,9 @@ public:
             return;
 
         // Back up the source to provide real audio context for the warmup
-        auto backupPos = std::max (SampleCount (0), static_cast<SampleCount> (readPosition) - latencySamples);
+        // Context only as long as the stretcher's input window: enough for it to warm up on real audio,
+        // and less audio-thread work per seek than backing up the whole latency.
+        auto backupPos = std::max (SampleCount (0), static_cast<SampleCount> (readPosition) - inputLatencySamples);
         source->setPosition (backupPos);
 
         // Feed real audio and discard output until the first kept output is the audio at readPosition:
