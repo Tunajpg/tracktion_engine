@@ -736,15 +736,19 @@ public:
         auto backupPos = std::max (SampleCount (0), static_cast<SampleCount> (readPosition) - latencySamples);
         source->setPosition (backupPos);
 
-        // Feed real audio and discard output until we've passed the latency region
+        // Feed real audio and discard output until we've passed the latency region AND the backed-up
+        // context: the first kept output must be the audio at readPosition, not at backupPos.
+        // (The backed-up context is in SOURCE samples; the stretcher emits 1/playbackSpeedRatio output per input.)
+        const int toDiscardInTotal = latencySamples
+                                   + static_cast<int> (std::lround ((readPosition - (double) backupPos) / playbackSpeedRatio));
         int outputDiscarded = 0;
 
-        while (outputDiscarded < latencySamples)
+        while (outputDiscarded < toDiscardInTotal)
         {
             feedAndProcess();
 
             const int available = outputFifo.getNumReady();
-            const int toDiscard = std::min (latencySamples - outputDiscarded, available);
+            const int toDiscard = std::min (toDiscardInTotal - outputDiscarded, available);
 
             if (toDiscard > 0)
             {
@@ -1033,9 +1037,11 @@ private:
     {
         const auto sampleRate = getSampleRate();
         const auto sourceTime = TimePosition::fromSamples (pos, sampleRate);
-        const auto warpedTime = warpTime (map, sourceTime).position;
-        const auto warpedSamplePos = toSamples (warpedTime, sampleRate);
-        source->setPosition (warpedSamplePos);
+        const auto warped = warpTime (map, sourceTime);
+        // The stretcher primes itself at its current speed when it seeks, so give it the speed of the
+        // segment it is seeking INTO first -- not the one the previous block played at.
+        reader->setSpeed (warped.stretchRatio);
+        source->setPosition (toSamples (warped.position, sampleRate));
     }
 };
 
