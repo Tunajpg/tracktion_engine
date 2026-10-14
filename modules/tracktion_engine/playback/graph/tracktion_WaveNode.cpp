@@ -670,6 +670,8 @@ public:
         assert (numChannels == (int) destBuffer.getNumChannels());
         const auto numFramesToDo = destBuffer.getNumFrames();
 
+        bool allOk = true;
+
         for (;;)
         {
             // If there are enough output samples in the fifo, read them out
@@ -680,13 +682,12 @@ public:
                 break;
             }
 
-            if (! feedAndProcess())
-                return false;
+            allOk = feedAndProcess() && allOk;
         }
 
         readPosition += numFramesToDo * playbackSpeedRatio;
 
-        return true;
+        return allOk;
     }
 
 
@@ -705,6 +706,7 @@ public:
     // Reads source audio, feeds it to the stretcher, and produces output into the FIFO
     bool feedAndProcess()
     {
+        bool ok = true;
         const auto numThisTime = timeStretcher.getFramesNeeded();
 
         if (numThisTime > 0)
@@ -713,9 +715,11 @@ public:
             scratchBuffer.buffer.clear();
             auto scratchView = toBufferView (scratchBuffer.buffer);
 
-            if (! source->readSamples (scratchView))
-                return false;
-
+            // A failed read (live, the file cache doesn't wait for a block it hasn't loaded) still moved the
+            // source on, so its frames go in as the silence they were cleared to: dropping them instead put
+            // the stretcher's input behind its source for the rest of the play -- a warped clip ran out of
+            // time against the click until a second play found the file cached.
+            ok = source->readSamples (scratchView);
             inputFifo.write (scratchBuffer.buffer);
         }
 
@@ -724,7 +728,7 @@ public:
         assert (outputFifo.getFreeSpace() >= chunkSize);
         timeStretcher.processData (inputFifo, numThisTime, outputFifo);
 
-        return true;
+        return ok;
     }
 
     // Output samples between priming from backupPos and the stretcher emitting the audio at readPosition.
@@ -906,10 +910,9 @@ public:
         scratchBuffer.buffer.clear();
         auto scratchView = toBufferView (scratchBuffer.buffer);
 
-        if (! source->readSamples (scratchView))
-            return false;
-
-        return timeStretcher.pushData (scratchBuffer.buffer.getArrayOfReadPointers(), numSourceFrames) == numSourceFrames;
+        // As TimeStretchReader::feedAndProcess: a missed read still moved the source, so push its silence.
+        const bool ok = source->readSamples (scratchView);
+        return timeStretcher.pushData (scratchBuffer.buffer.getArrayOfReadPointers(), numSourceFrames) == numSourceFrames && ok;
     }
 
     // Output samples between priming from backupPos and the stretcher emitting the audio at readPosition.
