@@ -597,6 +597,7 @@ public:
         timeStretcher.initialise (source->getSampleRate(), chunkSize, numChannels,
                                   mode, elastiqueProOptions, true);
         latencySamples = timeStretcher.getLatencySamples();
+        inputLatencySamples = timeStretcher.getInputLatencySamples();
         inputFifo.setSize (numChannels, timeStretcher.getMaxFramesNeeded() + 1);
         outputFifo.setSize (numChannels, timeStretcher.getMaxFramesNeeded() + 1);
 
@@ -688,9 +689,10 @@ public:
         return true;
     }
 
+
     static constexpr int chunkSize = 256;
     const int numChannels;
-    int latencySamples = 0;
+    int latencySamples = 0, inputLatencySamples = 0;
     TimeStretcher timeStretcher;
     AudioFifo inputFifo { numChannels, chunkSize }, outputFifo { numChannels, chunkSize };
     double playbackSpeedRatio = 1.0, semitonesShift = 0.0, readPosition = 0.0;
@@ -725,6 +727,13 @@ public:
         return true;
     }
 
+    // Output samples between priming from backupPos and the stretcher emitting the audio at readPosition.
+    int primeDiscardSamples (SampleCount backupPos) const
+    {
+        const double sourceSamples = (readPosition - (double) backupPos) + inputLatencySamples;
+        return static_cast<int> (std::lround (sourceSamples / playbackSpeedRatio)) + (latencySamples - inputLatencySamples);
+    }
+
     // Pre-feeds real audio into the stretcher and discards the initial output
     // to handle the stretcher's startup latency locally
     void primeStretcher()
@@ -736,11 +745,10 @@ public:
         auto backupPos = std::max (SampleCount (0), static_cast<SampleCount> (readPosition) - latencySamples);
         source->setPosition (backupPos);
 
-        // Feed real audio and discard output until we've passed the latency region AND the backed-up
-        // context: the first kept output must be the audio at readPosition, not at backupPos.
-        // (The backed-up context is in SOURCE samples; the stretcher emits 1/playbackSpeedRatio output per input.)
-        const int toDiscardInTotal = latencySamples
-                                   + static_cast<int> (std::lround ((readPosition - (double) backupPos) / playbackSpeedRatio));
+        // Feed real audio and discard output until the first kept output is the audio at readPosition:
+        // the backed-up context and the stretcher's INPUT latency are source samples (1/speed output
+        // each), its output latency is already output samples.
+        const int toDiscardInTotal = primeDiscardSamples (backupPos);
         int outputDiscarded = 0;
 
         while (outputDiscarded < toDiscardInTotal)
@@ -773,6 +781,7 @@ public:
         timeStretcher.initialise (source->getSampleRate(), chunkSize, numChannels,
                                   mode, elastiqueProOptions, true);
         latencySamples = timeStretcher.getLatencySamples();
+        inputLatencySamples = timeStretcher.getInputLatencySamples();
 
         source->setPosition (getReadPosition());
         timeStretcher.reset();
@@ -876,7 +885,7 @@ public:
     }
 
     const int numChannels, chunkSize = 1024;
-    int latencySamples = 0;
+    int latencySamples = 0, inputLatencySamples = 0;
     ReadAheadTimeStretcher timeStretcher { 3 };
     double playbackSpeedRatio = 1.0, semitonesShift = 0.0, readPosition = 0.0;
 
@@ -901,6 +910,13 @@ public:
         return timeStretcher.pushData (scratchBuffer.buffer.getArrayOfReadPointers(), numSourceFrames) == numSourceFrames;
     }
 
+    // Output samples between priming from backupPos and the stretcher emitting the audio at readPosition.
+    int primeDiscardSamples (SampleCount backupPos) const
+    {
+        const double sourceSamples = (readPosition - (double) backupPos) + inputLatencySamples;
+        return static_cast<int> (std::lround (sourceSamples / playbackSpeedRatio)) + (latencySamples - inputLatencySamples);
+    }
+
     // Pre-feeds real audio into the stretcher and discards initial output
     // to handle the stretcher's startup latency locally
     void primeStretcher()
@@ -911,15 +927,18 @@ public:
         auto backupPos = std::max (SampleCount (0), static_cast<SampleCount> (readPosition) - latencySamples);
         source->setPosition (backupPos);
 
+        // As TimeStretchReader: discard up to the audio at readPosition, not just the latency.
+        const int toDiscardInTotal = primeDiscardSamples (backupPos);
         int outputDiscarded = 0;
 
-        while (outputDiscarded < latencySamples)
+        while (outputDiscarded < toDiscardInTotal)
         {
             if (const auto numToPush = timeStretcher.getFramesRecomended(); numToPush > 0)
                 readSourceAndPushFrames (numToPush);
 
             AudioScratchBuffer discardBuf (numChannels, chunkSize);
-            const int numRead = timeStretcher.popData (discardBuf.buffer.getArrayOfWritePointers(), chunkSize);
+            const int numRead = timeStretcher.popData (discardBuf.buffer.getArrayOfWritePointers(),
+                                                       std::min (chunkSize, toDiscardInTotal - outputDiscarded));
 
             if (numRead <= 0)
                 break;

@@ -59,6 +59,9 @@ public:
     /** Returns the latency in samples introduced by the stretching algorithm. */
     int getLatencySamples() const;
 
+    /** The input-side part of getLatencySamples() (see TimeStretcher::getInputLatencySamples). */
+    int getInputLatencySamples() const;
+
     /** Returns the maximum number of frames that will ever be returned by getFramesNeeded.
         This can be used to size FIFOs for real-time use accordingly.
     */

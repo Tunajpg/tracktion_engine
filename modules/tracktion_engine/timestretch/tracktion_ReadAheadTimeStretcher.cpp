@@ -162,6 +162,11 @@ int ReadAheadTimeStretcher::getLatencySamples() const
     return stretcher.getLatencySamples();
 }
 
+int ReadAheadTimeStretcher::getInputLatencySamples() const
+{
+    return stretcher.getInputLatencySamples();
+}
+
 int ReadAheadTimeStretcher::getMaxFramesNeeded() const
 {
     // N.B. This should be thread safe as its constant in the stretcher implementations

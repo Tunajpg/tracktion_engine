@@ -181,6 +181,11 @@ public:
     */
     int getLatencySamples() const;
 
+    /** The INPUT-side part of getLatencySamples(), in input (source) samples; the rest is output-side,
+        in output samples. A reader priming the stretcher at a speed other than 1 needs the two apart.
+    */
+    int getInputLatencySamples() const;
+
     /** Returns the latency for a given mode and sample rate without creating a full stretcher.
         Useful for reporting latency to the graph before the stretcher is initialised.
     */
