@@ -645,6 +645,10 @@ public:
 
         playbackSpeedRatio = speedRatio;
         setSpeedAndPitch (playbackSpeedRatio, semitonesShift);
+
+        // Primed (when built, or at a seek) but nothing read yet: that prime was sized for the old speed.
+        if (primedButUnread)
+            repositionAndPrime ((SampleCount) readPosition);
     }
 
     void setPitch (double semitones) override
@@ -686,11 +690,13 @@ public:
         }
 
         readPosition += numFramesToDo * playbackSpeedRatio;
+        primedButUnread = false;
 
         return allOk;
     }
 
 
+    bool primedButUnread = false;
     static constexpr int chunkSize = 256;
     const int numChannels;
     int latencySamples = 0, inputLatencySamples = 0;
@@ -740,8 +746,20 @@ public:
 
     // Pre-feeds real audio into the stretcher and discards the initial output
     // to handle the stretcher's startup latency locally
+    void repositionAndPrime (SampleCount t)
+    {
+        readPosition = (double) t;
+        source->setPosition (t);
+        timeStretcher.reset();
+        setSpeedAndPitch (playbackSpeedRatio, semitonesShift);
+        inputFifo.reset();
+        outputFifo.reset();
+        primeStretcher();
+    }
+
     void primeStretcher()
     {
+        primedButUnread = true;
         if (latencySamples <= 0)
             return;
 
