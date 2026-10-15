@@ -888,6 +888,7 @@ struct SignalsmithStretcher  : public TimeStretcher::Stretcher
     {
         stretch.reset();
         hasDoneFinalBlock = false;
+        outputFrameRemainder = 0.0;
     }
 
     bool setSpeedAndPitch (float speedRatio_, float semitonesUp) override
@@ -913,9 +914,14 @@ struct SignalsmithStretcher  : public TimeStretcher::Stretcher
     int processData (const float* const* inChannels, int numSamples, float* const* outChannels) override
     {
         CRASH_TRACER
-        const int numOut = numSamples < juce::roundToInt (samplesPerOutputBuffer / speedRatio)
-                             ? std::max (1, juce::roundToInt (numSamples * speedRatio))
-                             : samplesPerOutputBuffer;
+        int numOut = samplesPerOutputBuffer;
+        if (numSamples < juce::roundToInt (samplesPerOutputBuffer / speedRatio))
+        {
+            // Capped: carry the fractional output frame, or each call's rounding drifts the speed.
+            const double exact = numSamples * (double) speedRatio + outputFrameRemainder;
+            numOut = std::max (1, (int) std::floor (exact));
+            outputFrameRemainder = exact - numOut;
+        }
         stretch.process (inChannels, numSamples, outChannels, numOut);
         return numOut;
     }
@@ -945,6 +951,7 @@ private:
     int numChannels = 0;
     const int samplesPerOutputBuffer;
     float speedRatio = 1.0f;
+    double outputFrameRemainder = 0.0;
     bool hasDoneFinalBlock = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SignalsmithStretcher)
