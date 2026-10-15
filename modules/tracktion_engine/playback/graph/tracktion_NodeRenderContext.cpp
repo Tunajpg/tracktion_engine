@@ -375,7 +375,7 @@ bool NodeRenderContext::renderNextBlock (std::atomic<float>& progressToUpdate)
         // Ending after end time and end allowance has elapsed
         return true;
     }
-    else if (streamTime > r.time.getEnd()
+    else if (r.stopEndAllowanceOnSilence && streamTime > r.time.getEnd()
              && renderingBuffer.getMagnitude (0, r.blockSizeForAudio) <= thresholdForStopping)
     {
         // Ending during end allowance period due to low magnitude

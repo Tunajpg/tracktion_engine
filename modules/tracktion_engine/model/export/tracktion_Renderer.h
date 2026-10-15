@@ -73,6 +73,10 @@ public:
                                                                      Mostly useful for freeze files and track renders, not usually in exporting. */
 
         bool createMidiFile = false;                            ///< If true, a MIDI file will be created
+        bool stopEndAllowanceOnSilence = true;                  /**< DAW fork: if true (te's behaviour), the render stops inside the
+                                                                     endAllowance period at the first block below -70 dB -- which cuts a
+                                                                     delay's echo that follows a silent gap. False renders the whole
+                                                                     allowance and leaves any trimming to the caller. */
         bool trimSilenceAtEnds = false;                         /**< If true, the render won't start until a non-silent level has been reached
                                                                      and will end once it becomes silent again. */
 
