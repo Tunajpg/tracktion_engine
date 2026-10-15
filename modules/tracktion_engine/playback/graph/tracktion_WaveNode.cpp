@@ -275,6 +275,7 @@ public:
 
         hasBeenReset = true;
         timeSourceIsAheadDueToLatency = {};
+        sourceFrameRemainder = 0.0;
     }
 
     SampleCount getPosition() override
@@ -291,6 +292,7 @@ public:
     void setPosition (TimePosition t) override
     {
         source->setPosition (t + timeSourceIsAheadDueToLatency);
+        sourceFrameRemainder = 0.0;
     }
 
     /** Sets a ratio to increase or decrease playback speed. */
@@ -321,7 +323,11 @@ public:
 
         const auto ratio = sampleRatio * speedRatio;
         const auto numDestFrames = destBuffer.getNumFrames();
-        const int numSourceFramesToRead = static_cast<int> ((numDestFrames * ratio) + 0.5);
+        // DAW fork (warp polish E5): carry the fractional source frame from block to block. Rounding it away
+        // every block drifted a 44.1 kHz file at 48 kHz by ~0.85 ms per second.
+        const double exactSourceFrames = numDestFrames * ratio + sourceFrameRemainder;
+        const int numSourceFramesToRead = static_cast<int> (std::floor (exactSourceFrames));
+        sourceFrameRemainder = exactSourceFrames - numSourceFramesToRead;
 
         if (std::exchange (hasBeenReset, false))
         {
@@ -351,6 +357,7 @@ public:
     const double sourceSampleRate { source->getSampleRate() };
     const double sampleRatio { sourceSampleRate / destSampleRate  };
     double speedRatio = 1.0;
+    double sourceFrameRemainder = 0.0;
     std::vector<juce::LagrangeInterpolator> resamplers;
     float gains[2] = { 1.0f, 1.0f };
     TimeDuration timeSourceIsAheadDueToLatency;
