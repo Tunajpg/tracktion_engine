@@ -897,9 +897,12 @@ struct SignalsmithStretcher  : public TimeStretcher::Stretcher
         return true;
     }
 
+    // DAW fork: past ~25x (a 999 BPM warp segment on a slow loop) a full output block needs more input than
+    // getMaxFramesNeeded(), the size TimeStretchReader gives its input FIFO. Cap the input per call and
+    // return proportionally fewer output frames instead, so the speed is kept and the FIFO never overflows.
     int getFramesNeeded() const override
     {
-        return juce::roundToInt (samplesPerOutputBuffer / speedRatio);
+        return std::min (juce::roundToInt (samplesPerOutputBuffer / speedRatio), getMaxFramesNeeded());
     }
 
     int getMaxFramesNeeded() const override
@@ -910,8 +913,11 @@ struct SignalsmithStretcher  : public TimeStretcher::Stretcher
     int processData (const float* const* inChannels, int numSamples, float* const* outChannels) override
     {
         CRASH_TRACER
-        stretch.process (inChannels, numSamples, outChannels, samplesPerOutputBuffer);
-        return samplesPerOutputBuffer;
+        const int numOut = numSamples < juce::roundToInt (samplesPerOutputBuffer / speedRatio)
+                             ? std::max (1, juce::roundToInt (numSamples * speedRatio))
+                             : samplesPerOutputBuffer;
+        stretch.process (inChannels, numSamples, outChannels, numOut);
+        return numOut;
     }
 
     int flush (float* const* outChannels) override

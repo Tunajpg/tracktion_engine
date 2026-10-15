@@ -738,7 +738,8 @@ public:
         }
 
         assert (inputFifo.getNumReady() >= numThisTime);
-        assert (outputFifo.getFreeSpace() >= numThisTime);
+        // DAW fork: one process writes at most chunkSize output frames, so that is the room it needs. The stock
+        // check against numThisTime (INPUT frames) fired once a hard squeeze (~25x) took near a FIFO's worth.
         assert (outputFifo.getFreeSpace() >= chunkSize);
         timeStretcher.processData (inputFifo, numThisTime, outputFifo);
 
