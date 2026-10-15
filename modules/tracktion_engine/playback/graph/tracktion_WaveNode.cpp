@@ -1035,9 +1035,15 @@ public:
                 WarpMap warpMap,
                 TimeStretcher::Mode mode,
                 TimeStretcher::ElastiqueProOptions options)
-        : SingleInputAudioReader (std::make_unique<TimeStretchReader> (std::move (input), mode, options)),
-          reader (static_cast<TimeStretchReader*> (source.get())), map (std::move (warpMap))
+        : SingleInputAudioReader (makeStage (std::move (input), mode, options)),
+          map (std::move (warpMap))
     {
+        // DAW fork (warp part 5): with the stretcher off (Re-Pitch) each segment is RESAMPLED at its ratio,
+        // so its pitch follows its speed; otherwise it is time-stretched as before.
+        if (mode == TimeStretcher::disabled)
+            resampler = static_cast<LagrangeResamplerReader*> (source.get());
+        else
+            reader = static_cast<TimeStretchReader*> (source.get());
     }
 
     SampleCount getPosition() override
@@ -1052,7 +1058,10 @@ public:
 
     void setPosition (SampleCount t) override
     {
-        if (t == readPosition)
+        // A resampler above re-positions every block, offset by its own small interpolation latency
+        // (TimeStretchReader tolerates 10 samples for the same reason): treat that as contiguous, or every
+        // block re-seeks and Re-Pitch buzzes.
+        if (std::abs (t - readPosition) <= 16)
             return;
 
         readPosition = t;
@@ -1064,14 +1073,39 @@ public:
         const auto unwarpedStartTime = TimePosition::fromSamples (readPosition, getSampleRate());
         const auto ratio = warpTime (map, unwarpedStartTime).stretchRatio;
 
-        reader->setSpeed (ratio);
+        setStageSpeed (ratio);
         readPosition += (SampleCount) destBuffer.getNumFrames();
 
-        return reader->readSamples (destBuffer);
+        // The Lagrange resampler ADDS into its destination (its usual callers hand it a cleared buffer);
+        // the buffer from above is a reused scratch buffer.
+        if (resampler != nullptr)
+            destBuffer.clear();
+
+        return source->readSamples (destBuffer);
     }
 
 private:
     TimeStretchReader* reader = nullptr;
+    LagrangeResamplerReader* resampler = nullptr;
+
+    static std::unique_ptr<AudioReader> makeStage (std::unique_ptr<AudioReader> input, TimeStretcher::Mode mode,
+                                                   TimeStretcher::ElastiqueProOptions options)
+    {
+        if (mode == TimeStretcher::disabled)
+        {
+            const auto rate = input->getSampleRate();
+            return std::make_unique<LagrangeResamplerReader> (std::move (input), rate);
+        }
+        return std::make_unique<TimeStretchReader> (std::move (input), mode, options);
+    }
+
+    void setStageSpeed (double ratio)
+    {
+        if (reader != nullptr)
+            reader->setSpeed (ratio);
+        else
+            resampler->setSpeedRatio (ratio);
+    }
     WarpMap map;
     SampleCount readPosition = 0;
 
@@ -1082,7 +1116,7 @@ private:
         const auto warped = warpTime (map, sourceTime);
         // The stretcher primes itself at its current speed when it seeks, so give it the speed of the
         // segment it is seeking INTO first -- not the one the previous block played at.
-        reader->setSpeed (warped.stretchRatio);
+        setStageSpeed (warped.stretchRatio);
         source->setPosition (toSamples (warped.position, sampleRate));
     }
 };

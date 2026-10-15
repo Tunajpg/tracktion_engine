@@ -660,7 +660,12 @@ TimeStretcher::Mode AudioClipBase::getActualTimeStretchMode() const noexcept
 {
     TimeStretcher::Mode ts = timeStretchMode;
 
-    if (ts == TimeStretcher::disabled && (getAutoPitch() || getAutoTempo() || getPitchChange() != 0.0f))
+    // DAW fork (warp part 5, Re-Pitch): a clip flagged appRePitch keeps the stretcher OFF even when synced,
+    // so it is resampled -- pitch follows the tempo ratio and the warp segments (Live's Re-Pitch).
+    static const juce::Identifier appRePitch ("appRePitch");
+
+    if (ts == TimeStretcher::disabled && (getAutoPitch() || getAutoTempo() || getPitchChange() != 0.0f)
+        && ! (bool) state.getProperty (appRePitch, false))
         ts = TimeStretcher::defaultMode;
 
     return ts;
