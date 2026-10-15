@@ -291,8 +291,9 @@ public:
 
     void setPosition (TimePosition t) override
     {
+        // Keep sourceFrameRemainder: TimeRangeReader calls this every block, and zeroing the carry here
+        // lost ~0.5 source frames per block until WarpReader re-seeked over the gap (an audible skip).
         source->setPosition (t + timeSourceIsAheadDueToLatency);
-        sourceFrameRemainder = 0.0;
     }
 
     /** Sets a ratio to increase or decrease playback speed. */
