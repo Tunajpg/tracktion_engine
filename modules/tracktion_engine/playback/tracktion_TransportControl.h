@@ -385,6 +385,10 @@ public:
     /** @internal. */
     juce::CachedValue<bool> snapToTimecode, looping;
 
+    /** DAW patch: when true, play() with looping on and the position BEFORE the loop start keeps that position and
+        rolls into the loop (a pre-roll, as Ableton Live does) instead of jumping to the loop start. Default off. */
+    bool playRollsInToLoop = false;
+
     //==============================================================================
     /** @internal */
     void callRecordingAboutToStartListeners (InputDeviceInstance&, EditItemID);

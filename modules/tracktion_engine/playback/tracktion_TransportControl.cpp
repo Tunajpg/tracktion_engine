@@ -1358,13 +1358,19 @@ void TransportControl::performPlay()
         if (transportState->justSendMMCIfEnabled && sendMMCStartPlay())
             return;
 
+        bool rollIn = false;
+
         if (looping)
         {
             const auto cursorPos = position.get();
             const auto loopRange = getLoopRange();
 
-            if (cursorPos < loopRange.getStart()
-                || cursorPos > loopRange.getEnd() - 0.1s)
+            if (playRollsInToLoop && cursorPos < loopRange.getStart())
+            {
+                rollIn = true;
+            }
+            else if (cursorPos < loopRange.getStart()
+                     || cursorPos > loopRange.getEnd() - 0.1s)
             {
                 position = loopRange.getStart();
             }
@@ -1409,6 +1415,9 @@ void TransportControl::performPlay()
             // the position for "this" block and it will get incremented the next block, actually starting
             // playback 1 block from the start
             playHeadWrapper->setPosition (position);
+
+            if (rollIn)
+                playHeadWrapper->setRollInToLoop (position);
         }
         else
         {
