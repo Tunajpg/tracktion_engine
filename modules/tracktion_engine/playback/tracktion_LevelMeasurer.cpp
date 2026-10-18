@@ -64,6 +64,8 @@ void LevelMeasurer::Client::reset() noexcept
         l = {};
 
     std::fill (overload.begin(), overload.end(), false);
+    std::fill (rmsSumSquares.begin(), rmsSumSquares.end(), 0.0);
+    std::fill (rmsNumSamples.begin(), rmsNumSamples.end(), (juce::int64) 0);
 
     midiLevels = {};
     clearOverload = true;
@@ -105,6 +107,19 @@ DbTimePair LevelMeasurer::Client::getAndClearAudioLevel (int chan) noexcept
     return result;
 }
 
+float LevelMeasurer::Client::getAndClearRMSLevelDb (int chan) noexcept
+{
+    juce::SpinLock::ScopedLockType sl (mutex);
+
+    if (chan < 0 || chan >= (int) rmsNumSamples.size() || rmsNumSamples[(size_t) chan] <= 0)
+        return -100.0f;
+
+    auto meanSquare = rmsSumSquares[(size_t) chan] / (double) rmsNumSamples[(size_t) chan];
+    rmsSumSquares[(size_t) chan] = 0.0;
+    rmsNumSamples[(size_t) chan] = 0;
+    return gainToDb ((float) std::sqrt (meanSquare));
+}
+
 void LevelMeasurer::Client::setNumChannelsUsed (int numChannels) noexcept
 {
     juce::SpinLock::ScopedLockType sl (mutex);
@@ -137,6 +152,8 @@ void LevelMeasurer::Client::ensureNumChannels (int needed)
     {
         audioLevels.resize ((size_t) needed);
         overload.resize ((size_t) needed, false);
+        rmsSumSquares.resize ((size_t) needed, 0.0);
+        rmsNumSamples.resize ((size_t) needed, 0);
     }
 }
 
@@ -170,6 +187,9 @@ void LevelMeasurer::Client::updateAllChannels (const ChannelLevel* levels, int n
 
         if (levels[i].overloaded)
             overload[(size_t) i] = true;
+
+        rmsSumSquares[(size_t) i] += levels[i].sumSquares;
+        rmsNumSamples[(size_t) i] += levels[i].numSamples;
     }
 }
 
@@ -214,7 +234,14 @@ void LevelMeasurer::processBuffer (juce::AudioBuffer<float>& buffer, int start, 
                             ? buffer.getMagnitude (i, start, numSamples)
                             : buffer.getRMSLevel (i, start, numSamples);
 
-            channelLevels[(size_t) i] = { { now, gainToDb (gain) }, gain > 0.999f };
+            // daw-meter-rms: every client also gets the block's sum of squares, so a peak meter
+            // can show a true RMS over its own poll interval.
+            double sumSquares = 0.0;
+            auto* data = buffer.getReadPointer (i, start);
+            for (int n = 0; n < numSamples; ++n)
+                sumSquares += (double) data[n] * (double) data[n];
+
+            channelLevels[(size_t) i] = { { now, gainToDb (gain) }, gain > 0.999f, sumSquares, numSamples };
         }
     }
 

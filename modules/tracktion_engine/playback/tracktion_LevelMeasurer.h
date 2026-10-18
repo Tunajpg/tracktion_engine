@@ -58,6 +58,8 @@ public:
     {
         DbTimePair level;
         bool overloaded = false;
+        double sumSquares = 0.0;  // daw-meter-rms: this block's sum of squared samples...
+        int numSamples = 0;       // ...over this many samples (0 in sumDiffMode)
     };
 
     struct Client
@@ -70,6 +72,9 @@ public:
         bool getAndClearPeak() noexcept;
         DbTimePair getAndClearMidiLevel() noexcept;
         DbTimePair getAndClearAudioLevel (int chan) noexcept;
+        /** daw-meter-rms: the RMS of every sample this channel saw since the last call, in dB,
+            whatever the measurer's mode (-100 when nothing arrived). Clears on read. */
+        float getAndClearRMSLevelDb (int chan) noexcept;
 
         /** @internal */
         void setNumChannelsUsed (int) noexcept;
@@ -88,6 +93,8 @@ public:
 
         std::vector<DbTimePair> audioLevels;
         std::vector<bool> overload;
+        std::vector<double> rmsSumSquares;
+        std::vector<juce::int64> rmsNumSamples;
         DbTimePair midiLevels;
         std::atomic<int> numChannelsUsed { 0 };
         bool clearOverload = true;
