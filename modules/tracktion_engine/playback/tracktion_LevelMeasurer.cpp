@@ -230,16 +230,21 @@ void LevelMeasurer::processBuffer (juce::AudioBuffer<float>& buffer, int start, 
 
         for (int i = 0; i < resultNumChans; ++i)
         {
-            auto gain = (mode == LevelMeasurer::peakMode)
-                            ? buffer.getMagnitude (i, start, numSamples)
-                            : buffer.getRMSLevel (i, start, numSamples);
-
-            // daw-meter-rms: every client also gets the block's sum of squares, so a peak meter
-            // can show a true RMS over its own poll interval.
+            // daw-meter-rms: one pass gives the peak and the block's sum of squares, so every
+            // client can also read a true RMS over its own poll interval; RMSMode's level is the
+            // same sum (what getRMSLevel computed), so no channel is walked twice.
+            float magnitude = 0.0f;
             double sumSquares = 0.0;
             auto* data = buffer.getReadPointer (i, start);
             for (int n = 0; n < numSamples; ++n)
+            {
+                magnitude = std::max (magnitude, std::abs (data[n]));
                 sumSquares += (double) data[n] * (double) data[n];
+            }
+
+            auto gain = (mode == LevelMeasurer::peakMode)
+                            ? magnitude
+                            : (numSamples > 0 ? (float) std::sqrt (sumSquares / (double) numSamples) : 0.0f);
 
             channelLevels[(size_t) i] = { { now, gainToDb (gain) }, gain > 0.999f, sumSquares, numSamples };
         }

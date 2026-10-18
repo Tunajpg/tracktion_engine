@@ -73,7 +73,8 @@ public:
         DbTimePair getAndClearMidiLevel() noexcept;
         DbTimePair getAndClearAudioLevel (int chan) noexcept;
         /** daw-meter-rms: the RMS of every sample this channel saw since the last call, in dB,
-            whatever the measurer's mode (-100 when nothing arrived). Clears on read. */
+            in peakMode and RMSMode (sumDiffMode carries no samples: always -100, as when nothing
+            arrived). Clears on read. */
         float getAndClearRMSLevelDb (int chan) noexcept;
 
         /** @internal */
