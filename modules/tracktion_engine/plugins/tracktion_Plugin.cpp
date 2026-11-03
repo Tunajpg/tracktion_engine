@@ -712,35 +712,51 @@ void Plugin::setQuickControlParameter (AutomatableParameter* param)
 namespace
 {
     std::atomic<uint64_t> breadcrumbSlots[Plugin::RenderBreadcrumbs::maxThreads] {};
-    std::atomic<int> breadcrumbSlotsUsed { 0 };
-    thread_local int breadcrumbSlotForThisThread = -1;
+    std::atomic<uint64_t> breadcrumbSlotsInUse { 0 }; // bit n = slot n claimed
+
+    // Released when its thread exits, so short-lived render threads (offline exports) don't use
+    // the slots up.
+    struct BreadcrumbSlotOwner
+    {
+        int slot = -1;
+
+        ~BreadcrumbSlotOwner()
+        {
+            if (slot >= 0)
+            {
+                breadcrumbSlots[slot].store (0);
+                breadcrumbSlotsInUse.fetch_and (~(uint64_t (1) << slot));
+            }
+        }
+    };
+
+    thread_local BreadcrumbSlotOwner breadcrumbSlotForThisThread;
 
     void noteRenderBreadcrumb (EditItemID id) noexcept
     {
-        if (breadcrumbSlotForThisThread < 0)
+        auto& owner = breadcrumbSlotForThisThread;
+
+        // All slots taken: try again next block (one atomic load).
+        for (auto used = breadcrumbSlotsInUse.load(); owner.slot < 0 && used != ~uint64_t (0);)
         {
-            const int slot = breadcrumbSlotsUsed.fetch_add (1);
-            breadcrumbSlotForThisThread = slot < Plugin::RenderBreadcrumbs::maxThreads ? slot : Plugin::RenderBreadcrumbs::maxThreads;
+            const int freeSlot = std::countr_zero (~used);
+            if (breadcrumbSlotsInUse.compare_exchange_weak (used, used | (uint64_t (1) << freeSlot)))
+                owner.slot = freeSlot;
         }
 
-        if (breadcrumbSlotForThisThread < Plugin::RenderBreadcrumbs::maxThreads)
-            breadcrumbSlots[breadcrumbSlotForThisThread].store (id.getRawID(), std::memory_order_relaxed);
+        if (owner.slot >= 0)
+            breadcrumbSlots[owner.slot].store (id.getRawID(), std::memory_order_relaxed);
     }
 }
 
 int Plugin::RenderBreadcrumbs::getSlotForThisThread() noexcept
 {
-    return breadcrumbSlotForThisThread < maxThreads ? breadcrumbSlotForThisThread : -1;
+    return breadcrumbSlotForThisThread.slot;
 }
 
 uint64_t Plugin::RenderBreadcrumbs::getLastEntered (int slot) noexcept
 {
     return slot >= 0 && slot < maxThreads ? breadcrumbSlots[slot].load (std::memory_order_relaxed) : 0;
-}
-
-int Plugin::RenderBreadcrumbs::getNumSlotsUsed() noexcept
-{
-    return std::min (breadcrumbSlotsUsed.load(), maxThreads);
 }
 
 void Plugin::applyToBufferWithAutomation (const PluginRenderContext& pc)

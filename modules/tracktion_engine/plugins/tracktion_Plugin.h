@@ -272,16 +272,16 @@ public:
     /** Diagnostics breadcrumb: the raw EditItemID of the plugin most recently entered by
         applyToBufferWithAutomation on each render thread (0 = none yet). Each thread that
         renders a plugin claims one slot the first time it does; slots are lock-free and
-        readable from any thread, including a crash handler on the crashing thread.
+        readable from any thread, including a crash handler on the crashing thread. A thread's
+        slot is released (and reads 0 again) when the thread exits.
     */
     struct RenderBreadcrumbs
     {
         static constexpr int maxThreads = 64;
         /** The slot this thread writes, or -1 if it has never rendered a plugin. */
         static int getSlotForThisThread() noexcept;
-        /** The plugin last entered on slot (0 if unused). */
+        /** The plugin last entered on slot 0..maxThreads-1 (0 if unused). */
         static uint64_t getLastEntered (int slot) noexcept;
-        static int getNumSlotsUsed() noexcept;
     };
 
     //==============================================================================
