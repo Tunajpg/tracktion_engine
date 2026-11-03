@@ -269,6 +269,22 @@ public:
     void applyToBufferWithAutomation (const PluginRenderContext&);
 
     //==============================================================================
+    /** Diagnostics breadcrumb: the raw EditItemID of the plugin most recently entered by
+        applyToBufferWithAutomation on each render thread (0 = none yet). Each thread that
+        renders a plugin claims one slot the first time it does; slots are lock-free and
+        readable from any thread, including a crash handler on the crashing thread.
+    */
+    struct RenderBreadcrumbs
+    {
+        static constexpr int maxThreads = 64;
+        /** The slot this thread writes, or -1 if it has never rendered a plugin. */
+        static int getSlotForThisThread() noexcept;
+        /** The plugin last entered on slot (0 if unused). */
+        static uint64_t getLastEntered (int slot) noexcept;
+        static int getNumSlotsUsed() noexcept;
+    };
+
+    //==============================================================================
     /** Plugins can return false if they want to avoid the overhead of measuring the CPU usage.
         It's a small overhead but with many tracks, the level meters and vol/pan plugins can make a difference.
     */

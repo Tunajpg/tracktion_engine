@@ -709,9 +709,44 @@ void Plugin::setQuickControlParameter (AutomatableParameter* param)
         quickParamName = param->paramID;
 }
 
+namespace
+{
+    std::atomic<uint64_t> breadcrumbSlots[Plugin::RenderBreadcrumbs::maxThreads] {};
+    std::atomic<int> breadcrumbSlotsUsed { 0 };
+    thread_local int breadcrumbSlotForThisThread = -1;
+
+    void noteRenderBreadcrumb (EditItemID id) noexcept
+    {
+        if (breadcrumbSlotForThisThread < 0)
+        {
+            const int slot = breadcrumbSlotsUsed.fetch_add (1);
+            breadcrumbSlotForThisThread = slot < Plugin::RenderBreadcrumbs::maxThreads ? slot : Plugin::RenderBreadcrumbs::maxThreads;
+        }
+
+        if (breadcrumbSlotForThisThread < Plugin::RenderBreadcrumbs::maxThreads)
+            breadcrumbSlots[breadcrumbSlotForThisThread].store (id.getRawID(), std::memory_order_relaxed);
+    }
+}
+
+int Plugin::RenderBreadcrumbs::getSlotForThisThread() noexcept
+{
+    return breadcrumbSlotForThisThread < maxThreads ? breadcrumbSlotForThisThread : -1;
+}
+
+uint64_t Plugin::RenderBreadcrumbs::getLastEntered (int slot) noexcept
+{
+    return slot >= 0 && slot < maxThreads ? breadcrumbSlots[slot].load (std::memory_order_relaxed) : 0;
+}
+
+int Plugin::RenderBreadcrumbs::getNumSlotsUsed() noexcept
+{
+    return std::min (breadcrumbSlotsUsed.load(), maxThreads);
+}
+
 void Plugin::applyToBufferWithAutomation (const PluginRenderContext& pc)
 {
     SCOPED_REALTIME_CHECK
+    noteRenderBreadcrumb (itemID);
 
    #if TRACKTION_ENABLE_PLUGIN_CPU_MEASUREMENT
     std::optional<ScopedCpuMeter> cpuMeter;
