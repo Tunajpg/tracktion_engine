@@ -79,24 +79,50 @@ void ClipGainNode::process (ProcessContext& pc)
     auto buffer = tracktion::graph::toAudioBuffer (dest);
 
     const auto gainAt = [] (float db) { return juce::Decibels::decibelsToGain (db, AudioClipBase::gainEnvelopeMinDb); };
-    const float startDb = getDbAt (editTime.getStart()), endDb = getDbAt (editTime.getEnd());
+    const auto pointAfter = [this] (TimePosition t)
+    {
+        return std::upper_bound (points.begin(), points.end(), t, [] (TimePosition x, const Point& p) { return x < p.time; });
+    };
 
     // The whole block inside one flat stretch (the common case): one gain.
-    const bool crossesPoint = std::any_of (points.begin(), points.end(), [&] (const Point& p)
-                                           { return p.time > editTime.getStart() && p.time < editTime.getEnd(); });
-    if (! crossesPoint && startDb == endDb)
+    const float startDb = getDbAt (editTime.getStart());
+    const auto first = pointAfter (editTime.getStart());
+    const bool crossesPoint = first != points.end() && first->time < editTime.getEnd();
+    if (! crossesPoint && startDb == getDbAt (editTime.getEnd()))
     {
         buffer.applyGain (gainAt (startDb));
         return;
     }
 
-    // Sample by sample, at each sample's own time (as FadeInOutNode maps them).
+    // Piece by piece between breakpoints: linear in dB is a constant gain ratio per sample, so each piece
+    // is one pow for its start and one for its ratio (samples timed as FadeInOutNode times them).
     const double secondsPerFrame = editTime.getLength().inSeconds() / numFrames;
-    for (int i = 0; i < numFrames; ++i)
+    for (int i = 0; i < numFrames;)
     {
-        const float g = gainAt (getDbAt (editTime.getStart() + TimeDuration::fromSeconds (i * secondsPerFrame)));
-        for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
-            buffer.getWritePointer (ch)[i] *= g;
+        const auto t = editTime.getStart() + TimeDuration::fromSeconds (i * secondsPerFrame);
+        const auto next = pointAfter (t);
+        int end = numFrames;
+        if (next != points.end())
+            end = juce::jlimit (i + 1, numFrames, (int) std::ceil ((next->time - editTime.getStart()).inSeconds() / secondsPerFrame));
+        const float db0 = getDbAt (t);
+        const float dbPerFrame = end - i > 1 ? (getDbAt (t + TimeDuration::fromSeconds ((end - 1 - i) * secondsPerFrame)) - db0) / (float) (end - 1 - i) : 0.0f;
+        if (db0 <= AudioClipBase::gainEnvelopeMinDb && dbPerFrame <= 0.0f)
+        {
+            for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+                buffer.clear (ch, i, end - i);
+        }
+        else
+        {
+            const double ratio = std::pow (10.0, dbPerFrame / 20.0);
+            for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
+            {
+                double g = std::pow (10.0, db0 / 20.0); // not floored: a ramp up from -144 dB rises
+                auto* d = buffer.getWritePointer (ch);
+                for (int k = i; k < end; ++k, g *= ratio)
+                    d[k] *= (float) g;
+            }
+        }
+        i = end;
     }
 }
 
