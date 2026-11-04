@@ -242,7 +242,11 @@ public:
 
         // DAW patch (virgin territory): no data here, so the parameter keeps its own value.
         const juce::ScopedLock sl (parameterStreamLock);
-        return parameterStream == nullptr || ! parameterStream->isVoidAt (t);
+
+        if (parameterStream == nullptr) // a lone point has no iterator: a lone terminator is all void
+            return ! (curve.getNumPoints() == 1 && (bool) curve.state.getChild (0).getProperty ("term", false));
+
+        return ! parameterStream->isVoidAt (t);
     }
 
     void setPosition (TimePosition time) override
