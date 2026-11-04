@@ -90,6 +90,9 @@ int FolderTrack::getFolderTrackNumber() const noexcept
 
 bool FolderTrack::isSubmixFolder() const
 {
+    if (isOrganisingFolder())
+        return false;
+
     for (auto p : pluginList)
         if (dynamic_cast<VCAPlugin*> (p) == nullptr && dynamic_cast<TextPlugin*> (p) == nullptr)
             return true;
@@ -466,7 +469,7 @@ bool FolderTrack::isFrozen (FreezeType t) const
 
 bool FolderTrack::canContainPlugin (Plugin* p) const
 {
-    return dynamic_cast<FreezePointPlugin*> (p) == nullptr;
+    return ! isOrganisingFolder() && dynamic_cast<FreezePointPlugin*> (p) == nullptr;
 }
 
 bool FolderTrack::willAcceptPlugin (Plugin& p)

@@ -34,6 +34,11 @@ public:
     //==============================================================================
     bool isSubmixFolder() const;
 
+    /** ARLA: an ORGANISING folder (Pro Tools' Basic Folder) is stored, not inferred: it never sums
+        and refuses every plugin, so no insert path can silently turn it into a submix. */
+    static inline const juce::Identifier organisingFolderProperty { "arlaOrganisingFolder" };
+    bool isOrganisingFolder() const     { return state.getProperty (organisingFolderProperty); }
+
     /** Returns the output if this track is a submix folder. */
     TrackOutput* getOutput() const noexcept;
 
