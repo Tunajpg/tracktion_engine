@@ -62,7 +62,20 @@ NodeRenderContext::NodeRenderContext (Renderer::RenderTask& owner_, Renderer::Pa
     nodePlayer->setNumThreads ((size_t) p.engine->getEngineBehaviour().getNumberOfCPUsToUseForAudio() - 1);
 
     numLatencySamplesToDrop = nodePlayer->getNode()->getNodeProperties().latencyNumSamples;
+    const auto loopRange = r.time;
     r.time = r.time.withEnd (r.time.getEnd() + TimeDuration::fromSamples (numLatencySamplesToDrop, r.sampleRateForAudio));
+
+    if (r.renderLoopTwice)
+    {
+        // DAW fork: play the range twice round a looping play head and drop the first pass, so what's
+        // written is the second pass with the first one's tails already sounding at its start.
+        loopRangeSamples = toSamples (loopRange, r.sampleRateForAudio);
+        numLatencySamplesToDrop += (int) loopRangeSamples.getLength();
+        r.time = r.time.withEnd (r.time.getEnd() + loopRange.getLength());
+        r.endAllowance = {};
+        r.wrapRemainder = originalParams.wrapRemainder = false;
+        r.trimSilenceAtEnds = originalParams.trimSilenceAtEnds = false;
+    }
 
     if (r.edit->getTransport().isPlayContextActive())
     {
@@ -252,6 +265,10 @@ bool NodeRenderContext::renderNextBlock (std::atomic<float>& progressToUpdate)
         blockEnd = streamTime + blockLength;
 
         playHead->playSyncedToRange (toSamples (TimeRange (streamTime, Edit::getMaximumLength()), r.sampleRateForAudio));
+
+        if (! loopRangeSamples.isEmpty())
+            playHead->setLoopRange (true, loopRangeSamples, false); // reference stays = timeline, now wrapped
+
         playHeadState->update (toSamples (TimeRange (streamTime, blockEnd), r.sampleRateForAudio));
     }
 
@@ -265,7 +282,11 @@ bool NodeRenderContext::renderNextBlock (std::atomic<float>& progressToUpdate)
             juce::Thread::sleep (timeToWait);
     }
 
-    currentTempoPosition->set (streamTime);
+    // The looped second pass runs past the range in reference time; tempo and modifiers follow the timeline.
+    const auto timelineTime = loopRangeSamples.isEmpty() || precount > 0 ? streamTime
+        : TimePosition::fromSamples (tracktion::graph::PlayHead::linearPositionToLoopPosition (toSamples (streamTime, r.sampleRateForAudio), loopRangeSamples),
+                                     r.sampleRateForAudio);
+    currentTempoPosition->set (timelineTime);
 
     resetFP();
 
@@ -273,7 +294,7 @@ bool NodeRenderContext::renderNextBlock (std::atomic<float>& progressToUpdate)
     const auto referenceSampleRange = juce::Range<int64_t>::withStartAndLength (toSamples (streamTimeRange.getStart(), originalParams.sampleRateForAudio), r.blockSizeForAudio);
 
     // Update modifier timers
-    r.edit->updateModifierTimers (streamTime, r.blockSizeForAudio);
+    r.edit->updateModifierTimers (timelineTime, r.blockSizeForAudio);
 
     // Wait for any nodes to render their sources or proxies
     auto leafNodesReady = [this, referenceSampleRange]
@@ -338,7 +359,7 @@ bool NodeRenderContext::renderNextBlock (std::atomic<float>& progressToUpdate)
 
     if (precount <= 0)
     {
-        jassert (playHeadState->isContiguousWithPreviousBlock());
+        jassert (playHeadState->isContiguousWithPreviousBlock() || ! loopRangeSamples.isEmpty()); // a loop pass wraps
 
         auto numSamplesDone = (uint32_t) juce::jmin (samplesToWrite, (int64_t) r.blockSizeForAudio);
         samplesToWrite -= numSamplesDone;

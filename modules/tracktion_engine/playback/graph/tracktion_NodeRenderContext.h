@@ -96,6 +96,7 @@ private:
     TimeDuration blockLength;
     int numPreRenderBlocks = 0;
     int numLatencySamplesToDrop = 0;
+    juce::Range<int64_t> loopRangeSamples; // DAW fork: Parameters::renderLoopTwice
     int realTimePerBlock = 0;
 
     double lastTime = 0;

@@ -112,6 +112,13 @@ public:
                                                                      original time range, so the result loops seamlessly.
                                                                      Incompatible with trimSilenceAtEnds, which takes priority. */
 
+        bool renderLoopTwice = false;                           /**< DAW fork: if true, the play head loops over `time` and the range is
+                                                                     played twice; only the second pass is written, so the first pass's
+                                                                     tails (reverb, delay, note releases) sound at the start of the file
+                                                                     and it loops seamlessly (Live's Render as Loop, Logic's 2nd cycle
+                                                                     pass). Nothing after the range plays. Ignores endAllowance,
+                                                                     wrapRemainder and trimSilenceAtEnds. */
+
         /// @internal
         bool separateTracks = false;
         /// @internal
