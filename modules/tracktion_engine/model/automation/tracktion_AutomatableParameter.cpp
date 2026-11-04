@@ -235,9 +235,14 @@ public:
         return curve.getValueAt (time, parameter.getCurrentBaseValue());
     }
 
-    bool isEnabledAt (TimePosition) override
+    bool isEnabledAt (TimePosition t) override
     {
-        return isEnabled();
+        if (! isEnabled())
+            return false;
+
+        // DAW patch (virgin territory): no data here, so the parameter keeps its own value.
+        const juce::ScopedLock sl (parameterStreamLock);
+        return parameterStream == nullptr || ! parameterStream->isVoidAt (t);
     }
 
     void setPosition (TimePosition time) override
@@ -1733,6 +1738,8 @@ AutomationIterator::AutomationIterator (Edit& edit, const AutomationCurve& curve
         dst.time = toUnderlying (src.time);
         dst.value = src.value;
         dst.curve = src.curve;
+        dst.term = curve.state.getChild (i).getProperty ("term", false);
+        anyTerm = anyTerm || dst.term;
 
         points.add (dst);
     }
@@ -1743,17 +1750,35 @@ AutomationIterator::AutomationIterator (const AutomatableParameter& param)
 {
 }
 
+double AutomationIterator::toCurveTime (EditPosition t) const noexcept
+{
+    if (timeBase == AutomationCurve::TimeBase::time)
+        return toTime (t, tempoSequence).inSeconds();
+
+    return toBeats (t, tempoSequence).inBeats();
+}
+
+bool AutomationIterator::isVoidAt (EditPosition t) const noexcept
+{
+    if (! anyTerm || points.isEmpty())
+        return false;
+
+    const double pos = toCurveTime (t);
+    auto next = std::upper_bound (points.begin(), points.end(), pos,
+                                  [] (double p, const AutoPoint& a) { return p < a.time; });
+
+    if (next == points.begin())
+        return true;
+
+    auto& last = *(next - 1);
+    return last.term && pos > last.time;
+}
+
 void AutomationIterator::setPosition (EditPosition newTime) noexcept
 {
     jassert (points.size() > 0);
 
-    const double newPostion = [this, &newTime]
-                              {
-                                  if (timeBase == AutomationCurve::TimeBase::time)
-                                      return toTime (newTime, tempoSequence).inSeconds();
-
-                                  return toBeats (newTime, tempoSequence).inBeats();
-                              }();
+    const double newPostion = toCurveTime (newTime);
 
     auto newIndex = updateIndex (newPostion);
 

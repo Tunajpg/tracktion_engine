@@ -424,15 +424,24 @@ struct AutomationIterator
     void setPosition (EditPosition) noexcept;
     float getCurrentValue() noexcept            { return currentValue; }
 
+    /** DAW patch (virgin territory): true where the curve has no data -- after a point whose
+        state carries "term" (until the next point), and before the first point of a curve with
+        any such terminator. The parameter keeps its own value there. Doesn't move the cursor. */
+    bool isVoidAt (EditPosition) const noexcept;
+
 private:
     int updateIndex (double position);
+    double toCurveTime (EditPosition) const noexcept;
 
     struct AutoPoint
     {
         double time = 0.0; // Could be time or beats depending on the curve's timeBase
         float value = 0.0f;
         float curve = 0.0f;
+        bool term = false;
     };
+
+    bool anyTerm = false;
 
     const tempo::Sequence& tempoSequence;
     juce::Array<AutoPoint> points;
