@@ -1179,8 +1179,10 @@ std::unique_ptr<tracktion::graph::Node> createLiveInputNodeForDevice (InputDevic
                                                            shouldMonitorTrackDevice (inputDeviceInstance));
             }
 
+        auto destTrack = findAudioTrackForID (inputDeviceInstance.edit, trackID);
         return makeNode<WaveInputDeviceNode> (inputDeviceInstance, *waveDevice,
-                                              waveDevice->getChannelSet());
+                                              waveDevice->getChannelSet(),
+                                              destTrack != nullptr ? destTrack->liveInputMonitorGate : nullptr);
     }
 
     return {};

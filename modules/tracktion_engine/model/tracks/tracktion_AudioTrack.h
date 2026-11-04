@@ -109,6 +109,16 @@ public:
     bool hasAnyLiveInputs();
     bool hasAnyTracksFeedingIn();
 
+    /** ARLA: a per-track monitor gate for physical wave input devices.
+        -1 (default): the device's MonitorMode decides, as in stock te.
+        0 / 1: the live input node is always built for this track (the device's MonitorMode is
+        ignored), and this flag silences / opens it block by block -- lock-free, no graph rebuild,
+        so it can follow the transport without a dropout and tracks sharing a device are
+        independent. Recording is unaffected (it is fed by the device instance, not the node).
+        Shared so a graph being torn down can never outlive it. Going from -1 to 0/1 only takes
+        effect at the next graph build. */
+    std::shared_ptr<std::atomic<int>> liveInputMonitorGate = std::make_shared<std::atomic<int>> (-1);
+
     juce::Array<Track*> getInputTracks() const override;
     juce::Array<Track*> findSidechainSourceTracks() const;
 

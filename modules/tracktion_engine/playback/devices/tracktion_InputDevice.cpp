@@ -190,6 +190,11 @@ bool InputDeviceInstance::isLivePlayEnabled (const Track& t) const
         if (dest->targetID != t.itemID)
             continue;
 
+        // ARLA: a gated track always gets its live node; the gate decides audibility per block.
+        if (owner.getDeviceType() == InputDevice::waveDevice)
+            if (auto at = dynamic_cast<const AudioTrack*> (&t); at != nullptr && at->liveInputMonitorGate->load() >= 0)
+                return true;
+
         switch (owner.getMonitorMode())
         {
             case InputDevice::MonitorMode::on:          return true;

@@ -12,10 +12,12 @@
 namespace tracktion::inline engine {
 
 WaveInputDeviceNode::WaveInputDeviceNode (InputDeviceInstance& idi, WaveInputDevice& owner,
-                                          const juce::AudioChannelSet& destChannelsToFill)
+                                          const juce::AudioChannelSet& destChannelsToFill,
+                                          std::shared_ptr<std::atomic<int>> gate)
     : instance (idi),
       waveInputDevice (owner),
-      destChannels (destChannelsToFill)
+      destChannels (destChannelsToFill),
+      monitorGate (std::move (gate))
 {
 }
 
@@ -60,6 +62,9 @@ void WaveInputDeviceNode::process (ProcessContext& pc)
     }
 
     lastCallbackTime = timeNow;
+
+    if (monitorGate != nullptr && monitorGate->load (std::memory_order_relaxed) == 0)
+        return; // ARLA: gated -- the (cleared) output stays silent; recording is fed elsewhere
 
     auto& destAudio = pc.buffers.audio;
     auto numSamples = destAudio.getNumFrames();
