@@ -75,6 +75,8 @@ public:
     // ARLA trim automation: a second, relative stage. Playback is dB(volume) + dB(trim volume)
     // and pan + trim pan (clamped); at unity (0 dB, centre) the render is exactly as without it.
     AutomatableParameter::Ptr trimVolParam, trimPanParam; // slider position / -1..1, like the two above
+    // True: the trim stage plays as unity whatever its values (ARLA's OFF mode). Saved, not undoable.
+    juce::CachedValue<bool> trimBypassed;
 
     /// This is the time over which volume changes will be ramped, to avoid
     /// zipper noise.

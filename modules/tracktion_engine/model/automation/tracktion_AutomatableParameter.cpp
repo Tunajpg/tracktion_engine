@@ -1435,7 +1435,9 @@ void AutomatableParameter::setParameterValue (float value, bool isFollowingCurve
                     }
                     else
                     {
-                        if (numPoints == 1)
+                        // ARLA: not while the curve is bypassed -- it isn't what plays, so a value set
+                        // then (automation OFF, or a pass holding the control) mustn't rewrite it.
+                        if (numPoints == 1 && ! curve.bypass.get())
                             curve.movePoint (*this, 0, curve.getPointTime (0), value, false, &ed.getUndoManager());
                     }
                 }

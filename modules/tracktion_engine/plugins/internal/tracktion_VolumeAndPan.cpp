@@ -111,6 +111,7 @@ VolumeAndPanPlugin::VolumeAndPanPlugin (PluginCreationInfo info, bool isMasterVo
     panLaw.referTo (state, IDs::panLaw, um);
     trimVolume.referTo (state, "trimVolume", um, decibelsToVolumeFaderPosition (0));
     trimPan.referTo (state, "trimPan", um);
+    trimBypassed.referTo (state, "trimBypassed", nullptr);
 
     if (isMasterVolumeNode)
     {
@@ -219,7 +220,7 @@ float VolumeAndPanPlugin::getTrimmedSliderPos (float sliderPos) const
     static const float unity = decibelsToVolumeFaderPosition (0.0f);
     const auto trimPos = trimVolParam->getCurrentValue();
 
-    if (trimPos == unity) // exactly as before: no dB round trip
+    if (trimPos == unity || trimBypassed.get()) // exactly as before: no dB round trip
         return sliderPos;
 
     if (sliderPos <= 0.0f || trimPos <= 0.0f) // -inf on either stays -inf
@@ -232,7 +233,7 @@ void VolumeAndPanPlugin::setSmoothedValueTargets (TimePosition time, bool update
 {
     auto sliderPos = getTrimmedSliderPos (getSliderPos() + getVCAPosDelta (time));
     const auto trimPanValue = trimPanParam->getCurrentValue();
-    const auto panValue = trimPanValue == 0.0f ? getPan() : juce::jlimit (-1.0f, 1.0f, getPan() + trimPanValue);
+    const auto panValue = trimPanValue == 0.0f || trimBypassed.get() ? getPan() : juce::jlimit (-1.0f, 1.0f, getPan() + trimPanValue);
 
     float gainL, gainR;
     getGainsFromVolumeFaderPositionAndPan (sliderPos, panValue, getPanLaw(), gainL, gainR);
@@ -366,7 +367,7 @@ void VolumeAndPanPlugin::muteOrUnmute()
 
 void VolumeAndPanPlugin::restorePluginStateFromValueTree (const juce::ValueTree& v)
 {
-    copyPropertiesToCachedValues (v, volume, pan, panLaw, applyToMidi, ignoreVca, polarity, trimVolume, trimPan);
+    copyPropertiesToCachedValues (v, volume, pan, panLaw, applyToMidi, ignoreVca, polarity, trimVolume, trimPan, trimBypassed);
 
     for (auto p : getAutomatableParameters())
         p->updateFromAttachedValue();
