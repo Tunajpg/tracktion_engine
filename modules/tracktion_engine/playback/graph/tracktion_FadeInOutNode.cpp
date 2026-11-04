@@ -21,7 +21,8 @@ namespace fade_utils
     inline void processSection (choc::buffer::ChannelArrayView<float> audio, TimeRange editTime,
                                 TimeRange fadeIn, AudioFadeCurve::Type fadeInType,
                                 TimeRange fadeOut, AudioFadeCurve::Type fadeOutType,
-                                bool clearExtraSamples)
+                                bool clearExtraSamples,
+                                AudioFadeCurve::Bend fadeInBend = {}, AudioFadeCurve::Bend fadeOutBend = {})
     {
         const auto numSamples = (int) audio.getNumFrames();
 
@@ -60,7 +61,7 @@ namespace fade_utils
                 auto buffer = tracktion::graph::toAudioBuffer (audio);
                 AudioFadeCurve::applyCrossfadeSection (buffer,
                                                        startSamp, endSamp - startSamp,
-                                                       fadeInType,
+                                                       fadeInType, fadeInBend, false,
                                                        (float) alpha1,
                                                        (float) alpha2);
             }
@@ -106,7 +107,7 @@ namespace fade_utils
                 auto buffer = tracktion::graph::toAudioBuffer (audio);
                 AudioFadeCurve::applyCrossfadeSection (buffer,
                                                        startSamp, endSamp - startSamp,
-                                                       fadeOutType,
+                                                       fadeOutType, fadeOutBend, true,
                                                        juce::jlimit (0.0f, 1.0f, (float) (1.0 - alpha1)),
                                                        juce::jlimit (0.0f, 1.0f, (float) (1.0 - alpha2)));
             }
@@ -128,13 +129,16 @@ FadeInOutNode::FadeInOutNode (std::unique_ptr<tracktion::graph::Node> inputNode,
                               ProcessState& ps,
                               TimeRange in, TimeRange out,
                               AudioFadeCurve::Type fadeInType_, AudioFadeCurve::Type fadeOutType_,
-                              bool clearSamplesOutsideFade)
+                              bool clearSamplesOutsideFade,
+                              AudioFadeCurve::Bend fadeInBend_, AudioFadeCurve::Bend fadeOutBend_)
     : TracktionEngineNode (ps),
       input (std::move (inputNode)),
       fadeIn (in),
       fadeOut (out),
       fadeInType (fadeInType_),
       fadeOutType (fadeOutType_),
+      fadeInBend (fadeInBend_),
+      fadeOutBend (fadeOutBend_),
       clearExtraSamples (clearSamplesOutsideFade)
 {
     setOptimisations ({ tracktion::graph::ClearBuffers::no,
@@ -193,7 +197,7 @@ void FadeInOutNode::process (ProcessContext& pc)
     fade_utils::processSection (destAudioBlock, editTimeRange,
                                 fadeIn + dynamicOffset, fadeInType,
                                 fadeOut + dynamicOffset, fadeOutType,
-                                clearExtraSamples);
+                                clearExtraSamples, fadeInBend, fadeOutBend);
 }
 
 bool FadeInOutNode::renderingNeeded (const TimeRange timelineRange)

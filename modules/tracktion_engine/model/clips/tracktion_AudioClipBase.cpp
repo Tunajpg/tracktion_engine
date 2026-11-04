@@ -221,6 +221,10 @@ AudioClipBase::AudioClipBase (const juce::ValueTree& v, EditItemID id, Type t, C
 
     fadeInType.referTo (state, IDs::fadeInType, um, AudioFadeCurve::linear);
     fadeOutType.referTo (state, IDs::fadeOutType, um, AudioFadeCurve::linear);
+    fadeInSkew.referTo (state, IDs::fadeInSkew, um, 0.0f);
+    fadeInSlope.referTo (state, IDs::fadeInSlope, um, 0.0f);
+    fadeOutSkew.referTo (state, IDs::fadeOutSkew, um, 0.0f);
+    fadeOutSlope.referTo (state, IDs::fadeOutSlope, um, 0.0f);
     autoCrossfade.referTo (state, IDs::autoCrossfade, um);
 
     fadeInBehaviour.referTo (state, IDs::fadeInBehaviour, um, gainFade);
@@ -355,6 +359,10 @@ void AudioClipBase::cloneFrom (Clip* c)
         fadeOut             .setValue (other->fadeOut, nullptr);
         fadeInType          .setValue (other->fadeInType, nullptr);
         fadeOutType         .setValue (other->fadeOutType, nullptr);
+        fadeInSkew          .setValue (other->fadeInSkew, nullptr);
+        fadeInSlope         .setValue (other->fadeInSlope, nullptr);
+        fadeOutSkew         .setValue (other->fadeOutSkew, nullptr);
+        fadeOutSlope        .setValue (other->fadeOutSlope, nullptr);
         autoCrossfade       .setValue (other->autoCrossfade, nullptr);
         fadeInBehaviour     .setValue (other->fadeInBehaviour, nullptr);
         fadeOutBehaviour    .setValue (other->fadeOutBehaviour, nullptr);
@@ -662,6 +670,18 @@ void AudioClipBase::setFadeInType (AudioFadeCurve::Type t)
         fadeInType = t;
     else
         changed(); // keep this, in case they press a fade button twice
+}
+
+void AudioClipBase::setFadeInBend (AudioFadeCurve::Bend b)
+{
+    fadeInSkew = juce::jlimit (-1.0f, 1.0f, b.skew);
+    fadeInSlope = juce::jlimit (-1.0f, 1.0f, b.slope);
+}
+
+void AudioClipBase::setFadeOutBend (AudioFadeCurve::Bend b)
+{
+    fadeOutSkew = juce::jlimit (-1.0f, 1.0f, b.skew);
+    fadeOutSlope = juce::jlimit (-1.0f, 1.0f, b.slope);
 }
 
 void AudioClipBase::setFadeOutType (AudioFadeCurve::Type t)
@@ -2548,6 +2568,7 @@ void AudioClipBase::valueTreePropertyChanged (juce::ValueTree& tree, const juce:
     if (tree == state)
     {
         if (id == IDs::fadeInType || id == IDs::fadeOutType
+            || id == IDs::fadeInSkew || id == IDs::fadeInSlope || id == IDs::fadeOutSkew || id == IDs::fadeOutSlope
             || id == IDs::fadeInBehaviour || id == IDs::fadeOutBehaviour
             || id == IDs::fadeIn || id == IDs::fadeOut
             || id == IDs::loopStart || id == IDs::loopLength

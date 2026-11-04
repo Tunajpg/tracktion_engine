@@ -264,6 +264,12 @@ public:
     /** Returns the curve shape for the fade out to use. */
     AudioFadeCurve::Type getFadeOutType() const         { return fadeOutType; }
 
+    /** DAW patch: the skew/slope a bend-type fade (AudioFadeCurve::bend) is drawn and played with. */
+    void setFadeInBend (AudioFadeCurve::Bend);
+    void setFadeOutBend (AudioFadeCurve::Bend);
+    AudioFadeCurve::Bend getFadeInBend() const          { return { fadeInSkew.get(), fadeInSlope.get() }; }
+    AudioFadeCurve::Bend getFadeOutBend() const         { return { fadeOutSkew.get(), fadeOutSlope.get() }; }
+
     /** Enables/disables auto-crossfading.
         When enabled, the fade in/out length will automatically be set to the length
         of any overlapping clip regions.
@@ -723,6 +729,7 @@ protected:
     juce::CachedValue<TimeDuration> fadeIn, fadeOut;
     TimeDuration autoFadeIn, autoFadeOut;
     juce::CachedValue<AudioFadeCurve::Type> fadeInType, fadeOutType;
+    juce::CachedValue<float> fadeInSkew, fadeInSlope, fadeOutSkew, fadeOutSlope; // DAW patch
     juce::CachedValue<bool> autoCrossfade;
     juce::CachedValue<FadeBehaviour> fadeInBehaviour, fadeOutBehaviour;
     juce::CachedValue<ResamplingQuality> resamplingQuality;

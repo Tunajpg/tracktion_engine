@@ -46,6 +46,10 @@ namespace IDs
     DECLARE_ID (midiMachineControlDestDevice)
     DECLARE_ID (fadeInType)
     DECLARE_ID (fadeOutType)
+    DECLARE_ID (fadeInSkew)    // DAW patch: AudioFadeCurve::Bend for a bend-type fade
+    DECLARE_ID (fadeInSlope)
+    DECLARE_ID (fadeOutSkew)
+    DECLARE_ID (fadeOutSlope)
     DECLARE_ID (videoSource)
     DECLARE_ID (videoMuted)
     DECLARE_ID (videoActive)

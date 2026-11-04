@@ -47,8 +47,32 @@ struct AudioFadeCurve
         linear  = 1,
         convex  = 2,
         concave = 3,
-        sCurve  = 4
+        sCurve  = 4,
+        bend    = 5   // DAW patch: a continuous curve set by a Bend (skew, slope); see bendGain
     };
+
+    /** DAW patch (ARLA, after Ableton Live's clip fades): a fade curve bent by two values in
+        [-1, 1]. Skew warps time (positive = a slower start), slope bows the gain (positive = up).
+        With u the forward time through the fade, w(x) = x((1 - skew) + skew x) and
+        s(x) = 3x^2 - 2x^3: a fade-in's gain is g(s(w(w(u)))), a fade-out's g(1 - s(w(w(u)))),
+        with g(y) = y((1 + slope) - slope y). The end points stay at 0 and 1 for any values. */
+    struct Bend
+    {
+        float skew = 0.0f, slope = 0.0f;
+    };
+
+    /** The gain of a bent fade at alpha, in this struct's convention: 0 silent, 1 full level. For a
+        fade-out alpha runs backwards in time (1 at the fade's start), as applyCrossfadeSection's does. */
+    static float bendGain (Bend b, float alpha, bool fadeOut) noexcept
+    {
+        const float a = juce::jlimit (-1.0f, 1.0f, b.skew), k = juce::jlimit (-1.0f, 1.0f, b.slope);
+        const auto warp = [a] (float x) { return x * ((1.0f - a) + a * x); };
+        const float u = juce::jlimit (0.0f, 1.0f, fadeOut ? 1.0f - alpha : alpha);
+        const float v = warp (warp (u));
+        const float s = v * v * (3.0f - 2.0f * v);
+        const float y = fadeOut ? 1.0f - s : s;
+        return y * ((1.0f + k) - k * y);
+    }
 
     /** Converts an alpha position along the curve (0 to 1.0) into the gain at that point. */
     template <typename CurveClass>
@@ -65,7 +89,7 @@ struct AudioFadeCurve
         if (type == concave)   return alphaToGain<Concave> (alpha);
         if (type == sCurve)    return alphaToGain<SCurve>  (alpha);
 
-        jassert (type == linear);
+        jassert (type == linear || type == bend); // a bend without its values reads as linear
         return alpha;
     }
 
@@ -107,6 +131,7 @@ struct AudioFadeCurve
             case convex:    renderBlock<Convex>  (dest, numSamples, startAlpha, endAlpha); break;
             case concave:   renderBlock<Concave> (dest, numSamples, startAlpha, endAlpha); break;
             case sCurve:    renderBlock<SCurve>  (dest, numSamples, startAlpha, endAlpha); break;
+            case bend:      renderBlock<Linear>  (dest, numSamples, startAlpha, endAlpha); break; // no Bend given
             default:        jassertfalse; break;
         }
     }
@@ -141,6 +166,13 @@ struct AudioFadeCurve
     static void applyCrossfadeSection (juce::AudioBuffer<float>&,
                                        int startSample, int numSamples,
                                        Type type,
+                                       float startAlpha,
+                                       float endAlpha);
+
+    /** DAW patch: as above; a bend type is rendered with `bend` (fadeOut says which way it runs). */
+    static void applyCrossfadeSection (juce::AudioBuffer<float>&,
+                                       int startSample, int numSamples,
+                                       Type type, Bend bend, bool fadeOut,
                                        float startAlpha,
                                        float endAlpha);
 

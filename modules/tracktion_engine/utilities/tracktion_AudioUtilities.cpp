@@ -387,6 +387,29 @@ void AudioFadeCurve::applyCrossfadeSection (juce::AudioBuffer<float>& buffer,
     }
 }
 
+void AudioFadeCurve::applyCrossfadeSection (juce::AudioBuffer<float>& buffer,
+                                            int startSample, int numSamples, AudioFadeCurve::Type type,
+                                            Bend bend, bool fadeOut, float startAlpha, float endAlpha)
+{
+    if (type != AudioFadeCurve::bend)
+        return applyCrossfadeSection (buffer, startSample, numSamples, type, startAlpha, endAlpha);
+
+    jassert (startSample >= 0 && startSample + numSamples <= buffer.getNumSamples() && numSamples > 0);
+
+    if (buffer.hasBeenCleared())
+        return;
+
+    const float delta = (endAlpha - startAlpha) / (float) numSamples;
+
+    for (int ch = buffer.getNumChannels(); --ch >= 0;)
+    {
+        auto* d = buffer.getWritePointer (ch, startSample);
+
+        for (int i = 0; i < numSamples; ++i)
+            d[i] *= bendGain (bend, startAlpha + delta * (float) i, fadeOut);
+    }
+}
+
 struct AddingFadeApplier
 {
     float* dest;

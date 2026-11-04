@@ -26,7 +26,8 @@ public:
                    ProcessState&,
                    TimeRange fadeIn, TimeRange fadeOut,
                    AudioFadeCurve::Type fadeInType, AudioFadeCurve::Type fadeOutType,
-                   bool clearSamplesOutsideFade);
+                   bool clearSamplesOutsideFade,
+                   AudioFadeCurve::Bend fadeInBend = {}, AudioFadeCurve::Bend fadeOutBend = {}); // DAW patch
 
     void setDynamicOffsetTime (TimeDuration) override;
 
@@ -41,6 +42,7 @@ private:
     std::unique_ptr<tracktion::graph::Node> input;
     TimeRange fadeIn, fadeOut;
     AudioFadeCurve::Type fadeInType, fadeOutType;
+    AudioFadeCurve::Bend fadeInBend, fadeOutBend;
     bool clearExtraSamples = true;
     TimeDuration dynamicOffset;
 

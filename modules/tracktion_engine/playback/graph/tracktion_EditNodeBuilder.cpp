@@ -380,7 +380,7 @@ std::unique_ptr<tracktion::graph::Node> createFadeNodeForClip (AudioClipBase& cl
                                         speedOut ? TimeRange (pos.getEnd() - juce::jmin (TimeDuration::fromSeconds (0.003), fOut), pos.getEnd())
                                                  : TimeRange (pos.getEnd() - fOut, pos.getEnd()),
                                         clip.getFadeInType(), clip.getFadeOutType(),
-                                        true);
+                                        true, clip.getFadeInBend(), clip.getFadeOutBend());
     }
 
     return node;
