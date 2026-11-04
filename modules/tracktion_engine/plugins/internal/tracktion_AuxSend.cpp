@@ -17,6 +17,7 @@ AuxSendPlugin::AuxSendPlugin (PluginCreationInfo info) : Plugin (info)
     gainLevel.referTo (state, IDs::auxSendSliderPos, um, decibelsToVolumeFaderPosition (0.0f));
     invertPhase.referTo (state, IDs::phase, um, false);
     lastVolumeBeforeMute.referTo (state, IDs::lastVolumeBeforeMuteDb, um, 0.0f);
+    followFader.referTo (state, "appFollowFader", um, false);
 
     gain = addParam ("send level", TRANS("Send level"), { 0.0f, 1.0f },
                      [] (float value)             { return juce::Decibels::toString (volumeFaderPositionToDB (value)); },
@@ -91,8 +92,22 @@ void AuxSendPlugin::initialiseWithoutStopping (const PluginInitialisationInfo&)
     TRACKTION_ASSERT_MESSAGE_THREAD
     auto newOwnerTrack = getOwnerTrack();
 
-    const juce::ScopedLock sl (ownerTrackLock);
-    ownerTrack = newOwnerTrack;
+    {
+        const juce::ScopedLock sl (ownerTrackLock);
+        ownerTrack = newOwnerTrack;
+    }
+
+    // The owner's fader, for followFader. Re-found on every graph build, so a moved send follows.
+    ownerFaderRef = newOwnerTrack != nullptr ? newOwnerTrack->pluginList.findFirstPluginOfType<VolumeAndPanPlugin>() : nullptr;
+    ownerFader.store (dynamic_cast<VolumeAndPanPlugin*> (ownerFaderRef.get()));
+}
+
+float AuxSendPlugin::getFollowFaderGain() const
+{
+    if (! followFader.get())
+        return 1.0f;
+    auto* fader = ownerFader.load();
+    return fader != nullptr ? volumeFaderPositionToGain (fader->getSliderPos()) : 1.0f;
 }
 
 void AuxSendPlugin::deinitialise()
