@@ -714,6 +714,7 @@ public:
 
     bool primedButUnread = false;
     double latencyDrift = 0.0; // source samples the stretcher's output runs ahead of readPosition (setSpeed)
+    static constexpr double maxSteering = 0.04; // DAW fork: the drift steering's largest local tempo change
     static constexpr int chunkSize = 256;
     const int numChannels;
     int latencySamples = 0, inputLatencySamples = 0;
@@ -731,11 +732,11 @@ public:
     {
         bool ok = true;
         // Steer out any drift a speed change left: fewer input frames for the same output while ahead, more
-        // while behind, at most a quarter of a chunk's input each time (a brief, small rate change).
-        const int maxStep = std::max (1, juce::roundToInt (chunkSize * playbackSpeedRatio) / 4);
-        const int adjust = juce::jlimit (-maxStep, maxStep, -juce::roundToInt (latencyDrift));
-        timeStretcher.setInputAdjust (adjust);
-        latencyDrift += adjust;
+        // while behind, at most maxSteering of a chunk's input each time -- a slight, pitch-kept tempo change
+        // spread over the chunks it takes. The drift counts down by what the stretcher actually applied: part
+        // of it when its input was capped, none for a stretcher that can't steer (only Signalsmith can).
+        const int maxStep = std::max (1, juce::roundToInt (chunkSize * playbackSpeedRatio * maxSteering));
+        timeStretcher.setInputAdjust (juce::jlimit (-maxStep, maxStep, -juce::roundToInt (latencyDrift)));
         const auto numThisTime = timeStretcher.getFramesNeeded();
 
         if (numThisTime > 0)
@@ -757,6 +758,7 @@ public:
         // check against numThisTime (INPUT frames) fired once a hard squeeze (~25x) took near a FIFO's worth.
         assert (outputFifo.getFreeSpace() >= chunkSize);
         timeStretcher.processData (inputFifo, numThisTime, outputFifo);
+        latencyDrift += timeStretcher.getAppliedInputAdjust();
 
         return ok;
     }

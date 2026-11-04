@@ -192,6 +192,12 @@ public:
     */
     void setInputAdjust (int frames);
 
+    /** DAW fork: the input frames the last processData() actually took beyond what the speed asks for its
+        output -- all of setInputAdjust's frames for a full block, part of them when the input was capped at
+        getMaxFramesNeeded(), and always 0 for stretchers without steering.
+    */
+    double getAppliedInputAdjust() const;
+
     /** Returns the latency for a given mode and sample rate without creating a full stretcher.
         Useful for reporting latency to the graph before the stretcher is initialised.
     */

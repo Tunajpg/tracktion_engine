@@ -88,7 +88,8 @@ struct TimeStretcher::Stretcher
     virtual int flush (float* const* outChannels) = 0;
     virtual int getLatencySamples() const { return 0; }
     virtual int getInputLatencySamples() const { return 0; }
-    virtual void setInputAdjust (int) {}
+    virtual void setInputAdjust (int) {}           // DAW fork: a no-op unless the stretcher can steer...
+    virtual double getAppliedInputAdjust() const { return 0.0; } // ...so nothing is ever reported applied
 };
 
 //==============================================================================
@@ -908,6 +909,7 @@ struct SignalsmithStretcher  : public TimeStretcher::Stretcher
     }
 
     void setInputAdjust (int frames) override   { inputAdjust = frames; }
+    double getAppliedInputAdjust() const override { return appliedInputAdjust; }
 
     int getMaxFramesNeeded() const override
     {
@@ -918,6 +920,9 @@ struct SignalsmithStretcher  : public TimeStretcher::Stretcher
     {
         CRASH_TRACER
         int numOut = samplesPerOutputBuffer;
+        // The input taken beyond what the speed asks for this output: all of inputAdjust for a full block,
+        // only the capped share of it otherwise (the reader counts its steering down by this, not by what it asked).
+        appliedInputAdjust = nominalFramesNeeded() - juce::roundToInt (samplesPerOutputBuffer / speedRatio);
         if (numSamples < nominalFramesNeeded())
         {
             // Capped: carry the fractional output frame, or each call's rounding drifts the speed. The rate is
@@ -927,6 +932,7 @@ struct SignalsmithStretcher  : public TimeStretcher::Stretcher
             const double exact = numSamples * rate + outputFrameRemainder;
             numOut = juce::jlimit (1, samplesPerOutputBuffer, (int) std::floor (exact));
             outputFrameRemainder = exact - numOut;
+            appliedInputAdjust = numSamples * (1.0 - rate / speedRatio);
         }
         stretch.process (inChannels, numSamples, outChannels, numOut);
         return numOut;
@@ -960,6 +966,7 @@ private:
     double outputFrameRemainder = 0.0;
     bool hasDoneFinalBlock = false;
     int inputAdjust = 0; // DAW fork: setInputAdjust's frames, on top of the speed's
+    double appliedInputAdjust = 0.0; // what the last processData took of it
 
     // The input one full output block takes: the speed's, plus any steering adjustment (never under 1).
     int nominalFramesNeeded() const
@@ -1386,6 +1393,11 @@ void TimeStretcher::setInputAdjust (int frames)
 {
     if (stretcher != nullptr)
         stretcher->setInputAdjust (frames);
+}
+
+double TimeStretcher::getAppliedInputAdjust() const
+{
+    return stretcher != nullptr ? stretcher->getAppliedInputAdjust() : 0.0;
 }
 
 int TimeStretcher::getLatencySamplesForMode (Mode mode, double sampleRate, bool realtime)
