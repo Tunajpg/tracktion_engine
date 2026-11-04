@@ -66,12 +66,15 @@ public:
     void restorePluginStateFromValueTree (const juce::ValueTree&) override;
 
     //==============================================================================
-    juce::CachedValue<float> volume, pan;
+    juce::CachedValue<float> volume, pan, trimVolume, trimPan;
     juce::CachedValue<bool> applyToMidi, ignoreVca, polarity;
     juce::CachedValue<int> panLaw;
 
     // NB the units used here are slider position
     AutomatableParameter::Ptr volParam, panParam;
+    // ARLA trim automation: a second, relative stage. Playback is dB(volume) + dB(trim volume)
+    // and pan + trim pan (clamped); at unity (0 dB, centre) the render is exactly as without it.
+    AutomatableParameter::Ptr trimVolParam, trimPanParam; // slider position / -1..1, like the two above
 
     /// This is the time over which volume changes will be ramped, to avoid
     /// zipper noise.
@@ -86,6 +89,7 @@ private:
     const bool isMasterVolume = false;
 
     void setSmoothedValueTargets (TimePosition, bool);
+    float getTrimmedSliderPos (float sliderPos) const;
     void refreshVCATrack();
     float getVCAPosDelta (TimePosition);
 
