@@ -628,6 +628,7 @@ public:
             return;
 
         readPosition = (double) t;
+        latencyDrift = 0.0;
 
         source->setPosition (t);
         timeStretcher.reset();
@@ -650,6 +651,13 @@ public:
     {
         if (playbackSpeedRatio == speedRatio)
             return;
+
+        // DAW fork (tempo map): mid-play, the output already in the stretcher's output latency was made at
+        // the old speed, so from here on it plays (outputLatency x (old - new)) source samples off
+        // readPosition -- a warped clip under a tempo change ran early or late by that for the rest of the
+        // play. feedAndProcess steers it back, a little per chunk.
+        if (! primedButUnread)
+            latencyDrift += (latencySamples - inputLatencySamples) * (playbackSpeedRatio - speedRatio);
 
         playbackSpeedRatio = speedRatio;
         setSpeedAndPitch (playbackSpeedRatio, semitonesShift);
@@ -705,6 +713,7 @@ public:
 
 
     bool primedButUnread = false;
+    double latencyDrift = 0.0; // source samples the stretcher's output runs ahead of readPosition (setSpeed)
     static constexpr int chunkSize = 256;
     const int numChannels;
     int latencySamples = 0, inputLatencySamples = 0;
@@ -721,6 +730,12 @@ public:
     bool feedAndProcess()
     {
         bool ok = true;
+        // Steer out any drift a speed change left: fewer input frames for the same output while ahead, more
+        // while behind, at most a quarter of a chunk's input each time (a brief, small rate change).
+        const int maxStep = std::max (1, juce::roundToInt (chunkSize * playbackSpeedRatio) / 4);
+        const int adjust = juce::jlimit (-maxStep, maxStep, -juce::roundToInt (latencyDrift));
+        timeStretcher.setInputAdjust (adjust);
+        latencyDrift += adjust;
         const auto numThisTime = timeStretcher.getFramesNeeded();
 
         if (numThisTime > 0)
@@ -757,6 +772,7 @@ public:
     // to handle the stretcher's startup latency locally
     void repositionAndPrime (SampleCount t)
     {
+        latencyDrift = 0.0;
         readPosition = (double) t;
         source->setPosition (t);
         timeStretcher.reset();

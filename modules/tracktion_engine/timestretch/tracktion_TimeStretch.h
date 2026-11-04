@@ -186,6 +186,12 @@ public:
     */
     int getInputLatencySamples() const;
 
+    /** DAW fork: the next getFramesNeeded()/processData() take `frames` more input frames (fewer, when
+        negative) than the speed asks for, for the same output -- a reader steering the stretcher's
+        output back onto its source position. A no-op for stretchers without it (only Signalsmith has it).
+    */
+    void setInputAdjust (int frames);
+
     /** Returns the latency for a given mode and sample rate without creating a full stretcher.
         Useful for reporting latency to the graph before the stretcher is initialised.
     */

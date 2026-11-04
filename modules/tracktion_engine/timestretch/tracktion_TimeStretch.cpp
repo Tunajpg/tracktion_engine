@@ -88,6 +88,7 @@ struct TimeStretcher::Stretcher
     virtual int flush (float* const* outChannels) = 0;
     virtual int getLatencySamples() const { return 0; }
     virtual int getInputLatencySamples() const { return 0; }
+    virtual void setInputAdjust (int) {}
 };
 
 //==============================================================================
@@ -903,8 +904,10 @@ struct SignalsmithStretcher  : public TimeStretcher::Stretcher
     // return proportionally fewer output frames instead, so the speed is kept and the FIFO never overflows.
     int getFramesNeeded() const override
     {
-        return std::min (juce::roundToInt (samplesPerOutputBuffer / speedRatio), getMaxFramesNeeded());
+        return std::min (nominalFramesNeeded(), getMaxFramesNeeded());
     }
+
+    void setInputAdjust (int frames) override   { inputAdjust = frames; }
 
     int getMaxFramesNeeded() const override
     {
@@ -915,11 +918,14 @@ struct SignalsmithStretcher  : public TimeStretcher::Stretcher
     {
         CRASH_TRACER
         int numOut = samplesPerOutputBuffer;
-        if (numSamples < juce::roundToInt (samplesPerOutputBuffer / speedRatio))
+        if (numSamples < nominalFramesNeeded())
         {
-            // Capped: carry the fractional output frame, or each call's rounding drifts the speed.
-            const double exact = numSamples * (double) speedRatio + outputFrameRemainder;
-            numOut = std::max (1, (int) std::floor (exact));
+            // Capped: carry the fractional output frame, or each call's rounding drifts the speed. The rate is
+            // the steered one (a full block's output for its adjusted input), the speed's own when unsteered --
+            // never more output than the block holds.
+            const double rate = samplesPerOutputBuffer / (samplesPerOutputBuffer / (double) speedRatio + inputAdjust);
+            const double exact = numSamples * rate + outputFrameRemainder;
+            numOut = juce::jlimit (1, samplesPerOutputBuffer, (int) std::floor (exact));
             outputFrameRemainder = exact - numOut;
         }
         stretch.process (inChannels, numSamples, outChannels, numOut);
@@ -953,6 +959,13 @@ private:
     float speedRatio = 1.0f;
     double outputFrameRemainder = 0.0;
     bool hasDoneFinalBlock = false;
+    int inputAdjust = 0; // DAW fork: setInputAdjust's frames, on top of the speed's
+
+    // The input one full output block takes: the speed's, plus any steering adjustment (never under 1).
+    int nominalFramesNeeded() const
+    {
+        return std::max (1, juce::roundToInt (samplesPerOutputBuffer / speedRatio) + inputAdjust);
+    }
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (SignalsmithStretcher)
 };
@@ -1367,6 +1380,12 @@ int TimeStretcher::getLatencySamples() const
 int TimeStretcher::getInputLatencySamples() const
 {
     return stretcher ? stretcher->getInputLatencySamples() : 0;
+}
+
+void TimeStretcher::setInputAdjust (int frames)
+{
+    if (stretcher != nullptr)
+        stretcher->setInputAdjust (frames);
 }
 
 int TimeStretcher::getLatencySamplesForMode (Mode mode, double sampleRate, bool realtime)
