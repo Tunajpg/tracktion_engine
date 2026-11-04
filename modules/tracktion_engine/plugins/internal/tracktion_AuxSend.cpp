@@ -112,6 +112,8 @@ float AuxSendPlugin::getFollowFaderGain() const
 
 void AuxSendPlugin::deinitialise()
 {
+    ownerFader.store (nullptr);   // DAW patch: let go of the fader; the next initialise re-finds it
+    ownerFaderRef = nullptr;
 }
 
 void AuxSendPlugin::applyToBuffer (const PluginRenderContext&)
