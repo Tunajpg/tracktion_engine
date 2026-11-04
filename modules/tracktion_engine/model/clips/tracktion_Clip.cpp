@@ -537,6 +537,16 @@ void Clip::rescale (TimePosition pivotTimeInEdit, double factor)
         {
             setPosition (pos.rescaled (pivotTimeInEdit, factor));
             setSpeedRatio (speedRatio / factor);
+
+            // ARLA: the clip-gain envelope is in content seconds (edit time - start + offset), which the
+            // offset above just scaled -- scale its points too, so they stay on the same audio
+            if (auto acb = dynamic_cast<AudioClipBase*> (this))
+                if (auto points = acb->getGainEnvelope(); ! points.empty())
+                {
+                    for (auto& p : points)
+                        p.time *= factor;
+                    acb->setGainEnvelope (std::move (points), getUndoManager());
+                }
         }
     }
 }

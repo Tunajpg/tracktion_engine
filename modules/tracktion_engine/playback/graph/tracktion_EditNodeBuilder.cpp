@@ -617,19 +617,8 @@ std::unique_ptr<tracktion::graph::Node> createNodeForAudioClip (AudioClipBase& c
         }
     }
 
-    // Plugins
-    if (params.includePlugins)
-    {
-        if (auto pluginList = clip.getPluginList())
-        {
-            for (auto p : *pluginList)
-                p->initialiseFully();
-
-            node = createPluginNodeForList (*pluginList, nullptr, std::move (node), playHeadState, params);
-        }
-    }
-
-    // ARLA: the clip-gain envelope (content seconds -> edit time), before the fades
+    // ARLA: the clip-gain envelope (content seconds -> edit time), right on the WaveNode (with the static
+    // gain), so it is pre-insert as Pro Tools clip gain and a latent clip plugin cannot shift it
     if (role != ClipRole::launcher)
     {
         if (auto envelope = clip.getGainEnvelope(); ! envelope.empty())
@@ -639,6 +628,18 @@ std::unique_ptr<tracktion::graph::Node> createNodeForAudioClip (AudioClipBase& c
             for (auto& p : envelope)
                 points.push_back ({ origin + TimeDuration::fromSeconds (p.time), p.db });
             node = makeNode<ClipGainNode> (std::move (node), params.processState, std::move (points));
+        }
+    }
+
+    // Plugins
+    if (params.includePlugins)
+    {
+        if (auto pluginList = clip.getPluginList())
+        {
+            for (auto p : *pluginList)
+                p->initialiseFully();
+
+            node = createPluginNodeForList (*pluginList, nullptr, std::move (node), playHeadState, params);
         }
     }
 
