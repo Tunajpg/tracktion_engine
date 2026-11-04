@@ -38,6 +38,8 @@ AuxSendNode::AuxSendNode (std::unique_ptr<Node> inputNode, int busIDToUse,
                     if (sourceSendPlugin.invertPhase)
                         gain *= -1.0f;
 
+                    gain *= sourceSendPlugin.getFollowFaderGain();   // DAW patch: post fader, pre pan
+
                     return gain;
                }),
       playHeadState (phs),

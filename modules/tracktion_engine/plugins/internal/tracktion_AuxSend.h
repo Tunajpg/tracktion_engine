@@ -57,6 +57,12 @@ public:
     juce::CachedValue<float> gainLevel;
     juce::CachedValue<bool> invertPhase;
 
+    // DAW patch (daw-send-modes): a send flagged followFader sits before its track's
+    // VolumeAndPanPlugin (so it is pre-pan) but is scaled by that fader's gain -- a mixer's
+    // "post fader, pre pan" send. Property "appFollowFader"; the gain is 1 when unset.
+    juce::CachedValue<bool> followFader;
+    float getFollowFaderGain() const;
+
     AutomatableParameter::Ptr gain;
 
     /// @internal N.B. used only for testing
@@ -70,6 +76,8 @@ private:
 
     juce::CriticalSection ownerTrackLock;
     Track* ownerTrack = nullptr;
+    Plugin::Ptr ownerFaderRef;                               // keeps ownerFader alive (message thread)
+    std::atomic<VolumeAndPanPlugin*> ownerFader { nullptr };   // read on the audio thread
 
     //==============================================================================
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (AuxSendPlugin)
