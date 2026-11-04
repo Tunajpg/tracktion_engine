@@ -192,6 +192,17 @@ public:
     /** Returns a LiveClipLevel which can be used to read the gain, pan and mute statuses. */
     LiveClipLevel getLiveClipLevel();
 
+    /** ARLA: the clip-gain envelope -- a breakpoint line in dB played on top of the static gain.
+        Times are content seconds (edit time - clip start + offset), so the line stays with the audio
+        through moves, trims, splits and copies. Linear in dB between points, held flat past the ends.
+        Saved as IDs::gainEnvelope ("t db t db ..."); no points = no envelope (sound unchanged).
+    */
+    struct GainPoint { double time = 0.0; float db = 0.0f; };
+    static constexpr float gainEnvelopeMinDb = -144.0f, gainEnvelopeMaxDb = 36.0f;
+    std::vector<GainPoint> getGainEnvelope() const;
+    /** Sorts by time and clamps each value to [gainEnvelopeMinDb, gainEnvelopeMaxDb]. */
+    void setGainEnvelope (std::vector<GainPoint>, juce::UndoManager*);
+
     /** Returns a shared playhead which is updated by the playback graph to track the
         current position being played within the clip's source file.
         This can be used by the UI to draw a transport indicator over the clip's waveform.

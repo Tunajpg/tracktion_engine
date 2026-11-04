@@ -629,6 +629,19 @@ std::unique_ptr<tracktion::graph::Node> createNodeForAudioClip (AudioClipBase& c
         }
     }
 
+    // ARLA: the clip-gain envelope (content seconds -> edit time), before the fades
+    if (role != ClipRole::launcher)
+    {
+        if (auto envelope = clip.getGainEnvelope(); ! envelope.empty())
+        {
+            const auto origin = toTime (clipTimeRangeToUse, clip.edit.tempoSequence).getStart() - clip.getPosition().getOffset();
+            std::vector<ClipGainNode::Point> points;
+            for (auto& p : envelope)
+                points.push_back ({ origin + TimeDuration::fromSeconds (p.time), p.db });
+            node = makeNode<ClipGainNode> (std::move (node), params.processState, std::move (points));
+        }
+    }
+
     // Create FadeInOutNode
     if (role != ClipRole::launcher)
         node = createFadeNodeForClip (clip, clipTimeRangeToUse, std::move (node), params);

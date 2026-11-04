@@ -482,6 +482,28 @@ void AudioClipBase::setGainDB (float g)
     level->dbGain = juce::jlimit (-100.0f, 24.0f, g);
 }
 
+std::vector<AudioClipBase::GainPoint> AudioClipBase::getGainEnvelope() const
+{
+    std::vector<GainPoint> points;
+    auto tokens = juce::StringArray::fromTokens (state.getProperty (IDs::gainEnvelope).toString(), false);
+    for (int i = 0; i + 1 < tokens.size(); i += 2)
+        points.push_back ({ tokens[i].getDoubleValue(), tokens[i + 1].getFloatValue() });
+    return points;
+}
+
+void AudioClipBase::setGainEnvelope (std::vector<GainPoint> points, juce::UndoManager* um)
+{
+    std::stable_sort (points.begin(), points.end(), [] (const GainPoint& a, const GainPoint& b) { return a.time < b.time; });
+    juce::String text;
+    for (auto& p : points)
+        text << (text.isEmpty() ? "" : " ") << juce::String (p.time, 9) << " "
+             << juce::String (juce::jlimit (gainEnvelopeMinDb, gainEnvelopeMaxDb, p.db), 6);
+    if (text.isEmpty())
+        state.removeProperty (IDs::gainEnvelope, um);
+    else
+        state.setProperty (IDs::gainEnvelope, text, um);
+}
+
 void AudioClipBase::setPan (float p)
 {
     level->pan = std::abs (p) < 0.01 ? 0.0f

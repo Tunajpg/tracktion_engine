@@ -156,7 +156,7 @@ struct Edit::TreeWatcher   : public juce::ValueTree::Listener
             else if (i == IDs::speed || i == IDs::source  || i == IDs::mpeMode
                         || i == IDs::fadeInType || i == IDs::fadeOutType
                         || i == IDs::fadeInBehaviour || i == IDs::fadeOutBehaviour
-                        || i == IDs::fadeIn || i == IDs::fadeOut
+                        || i == IDs::fadeIn || i == IDs::fadeOut || i == IDs::gainEnvelope
                         || i == IDs::loopStart || i == IDs::loopLength
                         || i == IDs::loopStartBeats || i == IDs::loopLengthBeats
                         || i == IDs::transpose || i == IDs::pitchChange

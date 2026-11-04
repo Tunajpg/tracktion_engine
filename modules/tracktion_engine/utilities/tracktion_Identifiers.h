@@ -348,6 +348,7 @@ namespace IDs
     DECLARE_ID (previewIndex)
     DECLARE_ID (crossfadeLength)
     DECLARE_ID (gain)
+    DECLARE_ID (gainEnvelope)
     DECLARE_ID (mute)
     DECLARE_ID (pan)
     DECLARE_ID (autoFadeIn)
