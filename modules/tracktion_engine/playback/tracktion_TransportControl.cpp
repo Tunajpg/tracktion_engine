@@ -1084,13 +1084,16 @@ void TransportControl::timerCallback()
     // DAW fork: a seek holds the readback for 200 ms so the pre-seek playhead can't overwrite it. Playing, the
     // hold ends as soon as the graph has taken the jump and run on from it: seek-then-play otherwise froze the
     // shown position for 200 ms while the audio already ran.
+    // One read, so the value checked is the value stored. (A tick inside the one audio callback between the jump
+    // and the new audible time can still see the pre-seek time; only a backward seek shorter than the bound passes,
+    // and the next tick corrects it.)
+    const auto live = playHeadWrapper->getLiveTransportPosition();
     const auto msSinceSeek = (juce::int64) juce::Time::getMillisecondCounter() - transportState->lastUserDragTime;
     auto seekHasLanded = [&]
     {
         if (! isPlaying() || playbackContext == nullptr || playbackContext->getPendingPositionChange())
             return false;
 
-        const auto live = playHeadWrapper->getLiveTransportPosition();
         return live > position.get() && live <= position.get() + TimeDuration::fromSeconds ((double) msSinceSeek / 1000.0 + 0.05);
     };
 
@@ -1103,7 +1106,7 @@ void TransportControl::timerCallback()
         // The other way to fix this mught be to change the play head to only snap the position on play start..
         if (! looping || isPlaying())
         {
-            const auto currentTime = playHeadWrapper->getLiveTransportPosition();
+            const auto currentTime = live;
             const auto sampleRate = playHeadWrapper->getSampleRate();
 
             // The playhead quantises positions to whole samples, so if it's still at the
