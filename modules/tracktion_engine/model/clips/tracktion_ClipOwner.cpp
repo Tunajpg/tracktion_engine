@@ -729,7 +729,7 @@ Clip* split (Clip& clip, const TimePosition time)
     {
         auto newClipState = clip.state.createCopy();
         edit.createNewItemID().writeID (newClipState, nullptr);
-        assignNewIDsToAutomationCurveModifiers (clip.edit, newClipState);
+        assignNewIDsToClipPluginsAndAutomationCurves (clip.edit, newClipState); // ARLA: plugins too (daw-clip-envelopes)
 
         if (auto newClip = insertClipWithState (*parent, newClipState))
         {

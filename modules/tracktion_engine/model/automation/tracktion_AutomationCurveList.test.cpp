@@ -313,10 +313,10 @@ TEST_SUITE("tracktion_engine")
         timing.loopLength = 0_bd;
 
         CHECK_EQ (timing.start.get(), 0_bp);
-        CHECK_EQ (timing.length.get(), 1_bd);   // Min length applied
+        CHECK_EQ (timing.length.get(), BeatDuration::fromBeats (0.25));   // Min length applied (ARLA: Live's 0.25 beat)
         CHECK(! timing.looping.get());
         CHECK_EQ (timing.loopStart.get(), 0_bp);
-        CHECK_EQ (timing.loopLength.get(), 1_bd);   // Min loop length applied
+        CHECK_EQ (timing.loopLength.get(), BeatDuration::fromBeats (0.25));   // Min loop length applied (ARLA: Live's 0.25 beat)
 
         SUBCASE("Unlooped")
         {
@@ -567,6 +567,7 @@ TEST_SUITE("tracktion_engine")
             }
         }
 
+        // ARLA (daw-clip-envelopes): linked curves map as the audio does, loopStart + fmod (x, length)
         SUBCASE("Looping")
         {
             clip.setOffset (0_td);
@@ -584,17 +585,17 @@ TEST_SUITE("tracktion_engine")
                 CHECK (getValuesAtEditPosition (*curveMod, *context->volParam, 1_bp).baseValue.value()
                        == doctest::Approx (1.0f));
                 CHECK (getValuesAtEditPosition (*curveMod, *context->volParam, 2_bp).baseValue.value()
-                       == doctest::Approx (1.0f));
+                       == doctest::Approx (0.0f));
                 CHECK (getValuesAtEditPosition (*curveMod, *context->volParam, 3_bp).baseValue.value()
-                       == doctest::Approx (0.0f));
+                       == doctest::Approx (1.0f));
                 CHECK (getValuesAtEditPosition (*curveMod, *context->volParam, 3.99_bp).baseValue.value()
-                       == doctest::Approx (0.0f));
+                       == doctest::Approx (1.0f));
 
                 // End of loop, not inclusive so loops round to start
                 CHECK (getValuesAtEditPosition (*curveMod, *context->volParam, 4_bp).baseValue.value()
                        == doctest::Approx (1.0f));
                 CHECK (getValuesAtEditPosition (*curveMod, *context->volParam, 5_bp).baseValue.value()
-                       == doctest::Approx (1.0f));
+                       == doctest::Approx (0.0f));
                 CHECK (getValuesAtEditPosition (*curveMod, *context->volParam, 5.99_bp).baseValue.value()
                        == doctest::Approx (0.0f));
 
@@ -616,23 +617,23 @@ TEST_SUITE("tracktion_engine")
                 CHECK (getValuesAtEditPosition (*curveMod, *context->volParam, 1_bp).baseValue.value()
                        == doctest::Approx (1.0f));
                 CHECK (getValuesAtEditPosition (*curveMod, *context->volParam, 2_bp).baseValue.value()
-                       == doctest::Approx (1.0f));
+                       == doctest::Approx (0.0f));
                 CHECK (getValuesAtEditPosition (*curveMod, *context->volParam, 2.49_bp).baseValue.value()
-                       == doctest::Approx (1.0f));
+                       == doctest::Approx (0.0f));
                 CHECK (getValuesAtEditPosition (*curveMod, *context->volParam, 2.5_bp).baseValue.value()
                        == doctest::Approx (0.0f));
                 CHECK (getValuesAtEditPosition (*curveMod, *context->volParam, 3_bp).baseValue.value()
-                       == doctest::Approx (0.0f));
+                       == doctest::Approx (1.0f));
 
                 // End of loop, not inclusive so loops round to start
                 CHECK (getValuesAtEditPosition (*curveMod, *context->volParam, 4_bp).baseValue.value()
                        == doctest::Approx (1.0f));
                 CHECK (getValuesAtEditPosition (*curveMod, *context->volParam, 5_bp).baseValue.value()
-                       == doctest::Approx (1.0f));
-                CHECK (getValuesAtEditPosition (*curveMod, *context->volParam, 5.49_bp).baseValue.value()
-                       == doctest::Approx (1.0f));
-                CHECK (getValuesAtEditPosition (*curveMod, *context->volParam, 6_bp).baseValue.value()
                        == doctest::Approx (0.0f));
+                CHECK (getValuesAtEditPosition (*curveMod, *context->volParam, 5.49_bp).baseValue.value()
+                       == doctest::Approx (0.0f));
+                CHECK (getValuesAtEditPosition (*curveMod, *context->volParam, 6_bp).baseValue.value()
+                       == doctest::Approx (1.0f));
 
                 // End of clip so no value
                 CHECK (! getValuesAtEditPosition (*curveMod, *context->volParam, 7_bp).baseValue.has_value());

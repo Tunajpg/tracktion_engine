@@ -559,22 +559,13 @@ std::optional<EditPosition> applyTimingToCurvePosition (AutomationCurveModifier&
     }
     else if (auto clipPosInfo = acm.getClipPositionInfo(); clipPosInfo.loopRange)
     {
-        // Use clip looping
-        auto loopStart = clipPosInfo.loopRange->getStart();
-
+        // Use clip looping.
+        // ARLA (daw-clip-envelopes): map as the audio does (BeatRangeReader::linearPositionToLoopPosition,
+        // loopStart + fmod (x, length)), so points sit in content beats under the waveform. The old
+        // "x <= loopStart ? x : loopStart + fmod (x - loopStart, length)" disagreed once the loop starts past 0.
         auto posBeats = toBeats (curvePos, ts);
-
-        if (posBeats > loopStart)
-        {
-            auto posRelToLoopStart = posBeats - loopStart;
-            auto moduloPosRelToLoopStart = std::fmod (toUnderlying (posRelToLoopStart),
-                                                      toUnderlying (clipPosInfo.loopRange->getLength()));
-
-            posBeats = BeatPosition::fromBeats (moduloPosRelToLoopStart)
-                        + toDuration (loopStart);
-        }
-
-        curvePos = posBeats;
+        curvePos = clipPosInfo.loopRange->getStart()
+                    + BeatDuration::fromBeats (std::fmod (posBeats.inBeats(), clipPosInfo.loopRange->getLength().inBeats()));
     }
 
     return curvePos;
@@ -735,6 +726,33 @@ void assignNewIDsToAutomationCurveModifiers (Edit& edit, juce::ValueTree& state)
 
         if (v.hasType (IDs::AUTOMATIONCURVEMODIFIER))
             edit.createNewItemID().writeID (v, nullptr);
+    }
+}
+
+void assignNewIDsToClipPluginsAndAutomationCurves (Edit& edit, juce::ValueTree& clipState)
+{
+    // One scratch parent, so remapIDs sees the declarations and the references together.
+    juce::ValueTree scratch ("SCRATCH");
+    std::vector<std::pair<int, juce::ValueTree>> moved; // descending index
+
+    for (int i = clipState.getNumChildren(); --i >= 0;)
+    {
+        auto child = clipState.getChild (i);
+
+        if (child.hasType (IDs::PLUGIN) || child.hasType (IDs::AUTOMATIONCURVES))
+        {
+            clipState.removeChild (i, nullptr);
+            scratch.appendChild (child, nullptr);
+            moved.emplace_back (i, child);
+        }
+    }
+
+    EditItemID::remapIDs (scratch, nullptr, edit);
+
+    for (auto it = moved.rbegin(); it != moved.rend(); ++it)
+    {
+        scratch.removeChild (it->second, nullptr);
+        clipState.addChild (it->second, it->first, nullptr);
     }
 }
 

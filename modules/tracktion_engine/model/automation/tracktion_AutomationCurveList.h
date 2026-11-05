@@ -13,13 +13,14 @@ namespace tracktion::inline engine
 
 //==============================================================================
 //==============================================================================
-template<int minBeats>
+// ARLA (daw-clip-envelopes): a ratio, so the unlinked minimum can be Live's 0.25 beat (was whole beats).
+template<int minBeatsNumerator, int minBeatsDenominator = 1>
 struct MinBeatConstrainer
 {
     template<typename T>
     static BeatDuration constrain (const T& v)
     {
-        return std::max (v, BeatDuration::fromBeats (minBeats));
+        return std::max (v, BeatDuration::fromBeats (minBeatsNumerator / (double) minBeatsDenominator));
     }
 
     static BeatDuration constrain (const juce::var& v)
@@ -143,11 +144,11 @@ public:
     {
         juce::CachedValue<AtomicWrapperRelaxed<bool>> unlinked;
         juce::CachedValue<AtomicWrapperRelaxed<BeatPosition>> start;
-        juce::CachedValue<AtomicWrapperRelaxed<BeatDuration, MinBeatConstrainer<1>>> length;
+        juce::CachedValue<AtomicWrapperRelaxed<BeatDuration, MinBeatConstrainer<1, 4>>> length;
 
         juce::CachedValue<AtomicWrapperRelaxed<bool>> looping;
         juce::CachedValue<AtomicWrapperRelaxed<BeatPosition>> loopStart;
-        juce::CachedValue<AtomicWrapperRelaxed<BeatDuration, MinBeatConstrainer<1>>> loopLength;
+        juce::CachedValue<AtomicWrapperRelaxed<BeatDuration, MinBeatConstrainer<1, 4>>> loopLength;
     };
 
     /** Returns the timing properties for a curve type. */
@@ -390,6 +391,12 @@ void updateRelativeDestinationOrRemove (AutomationCurveList&, AutomationCurveMod
     @see split
 */
 void assignNewIDsToAutomationCurveModifiers (Edit&, juce::ValueTree&);
+
+/** ARLA (daw-clip-envelopes): gives a copied clip state's own plugins AND curve modifiers new IDs, remapped
+    together so curve sources and modifier assignments follow them. assignNewIDsToAutomationCurveModifiers
+    alone leaves the copy's plugin sharing the original's ID (and its assignments pointing at the old curves).
+*/
+void assignNewIDsToClipPluginsAndAutomationCurves (Edit&, juce::ValueTree& clipState);
 
 /** Removes any assignments in the given state if they don't have the given parameter as the destination.
     You shouldn't need to call this manually, it's used internally to clean up after copy/paste operations etc..
