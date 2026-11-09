@@ -255,6 +255,7 @@ void CombiningNode::prepareToPlay (const tracktion::graph::PlaybackInitialisatio
     }
 
     midiNodes.clear();
+    orphanedNotes.clear(); // a re-prepare of this node must not re-append the same orphans
 
     for (auto timedNode : inputs)
         for (auto node : timedNode->getNodes())
@@ -311,15 +312,24 @@ void CombiningNode::process (ProcessContext& pc)
     // Merge any note-offs from clips that have been deleted
     pc.buffers.midi.mergeFromAndClear (noteOffEventsToSend);
 
-    // ARLA (daw-stuck-notes): a jump already ends every note (PluginNode's all-notes-off), so the
-    // lists are stale; otherwise, on the first block after a rebuild, end what nothing still holds.
+    // ARLA (daw-stuck-notes): a jump (play start, seek, stop) ends every note these clips started,
+    // and only those, so an instrument need not act on PluginNode's all-notes-off flag (which would
+    // also cut live-played notes). Otherwise, on the first block after a rebuild, end what nothing
+    // still holds.
     if (getPlayHeadState().didPlayheadJump())
     {
+        auto endAll = [&] (ActiveNoteList& notes, MPESourceID source)
+        {
+            notes.iterate ([&] (int chan, int note)
+                           { pc.buffers.midi.addMidiMessage (juce::MidiMessage::noteOff (chan, note), 0.0, source); });
+            notes.reset();
+        };
+
         for (auto n : midiNodes)
-            n->getActiveNoteList()->reset();
+            endAll (*n->getActiveNoteList(), n->getMPESourceID());
 
         for (auto& o : orphanedNotes)
-            o.notes->reset();
+            endAll (*o.notes, o.source);
 
         endStaleNotesOnNextBlock = false;
     }
