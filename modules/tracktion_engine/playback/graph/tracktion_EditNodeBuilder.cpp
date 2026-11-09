@@ -2189,6 +2189,16 @@ std::unique_ptr<tracktion::graph::Node> createNodeForEdit (Edit& edit, const Cre
         {
             if (output->getDestinationTrack() != nullptr)
                 continue;
+
+            // ARLA (Sends Only): a track routed to "(none)" is processed for its sends but heard
+            // nowhere, as in playback (createNodeForEdit's bus-track branch wraps it in a SinkNode).
+            if (output->outputsToNone())
+            {
+                if (auto node = createNodeForTrack (*t, params))
+                    trackNodes.push_back (makeNode<SinkNode> (std::move (node)));
+
+                continue;
+            }
         }
         else
         {

@@ -546,8 +546,8 @@ TEST_CASE ("Edit Node Builder")
             busTrack->getOutput().setOutputToNone();
             busTrack->pluginList.insertPlugin (edit->getPluginCache().createNewPlugin (AuxReturnPlugin::xmlTypeName, {}), 0, nullptr);
 
-            // Bus track aux return receives signal
-            expectPeak (*edit, { 0s, durationInSeconds }, getAllTracks (*edit), 2.0f);
+            // Bus track aux return receives signal, but a "(none)" output is heard nowhere (ARLA Sends Only: render = playback)
+            expectPeak (*edit, { 0s, durationInSeconds }, getAllTracks (*edit), 1.0f);
 
             // Bus track graph builds with no output destination
             {
@@ -617,8 +617,8 @@ TEST_CASE ("Edit Node Builder")
             pluginsToWrap.add (busTrack->pluginList.getPlugins().getFirst());
             RackType::createTypeToWrapPlugins (pluginsToWrap, *edit);
 
-            // Bus track with Rack - aux return receives signal
-            expectPeak (*edit, { 0s, durationInSeconds }, getAllTracks (*edit), 2.0f);
+            // Bus track with Rack - aux return receives signal, but a "(none)" output is heard nowhere (ARLA Sends Only: render = playback)
+            expectPeak (*edit, { 0s, durationInSeconds }, getAllTracks (*edit), 1.0f);
 
             // Bus track with Rack - graph builds with no output
             {
