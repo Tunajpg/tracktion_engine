@@ -254,6 +254,13 @@ void CombiningNode::prepareToPlay (const tracktion::graph::PlaybackInitialisatio
             isReadyToProcessBlock.store (false, std::memory_order_release);
     }
 
+    midiNodes.clear();
+
+    for (auto timedNode : inputs)
+        for (auto node : timedNode->getNodes())
+            if (auto midiNode = dynamic_cast<MidiNode*> (node))
+                midiNodes.push_back (midiNode);
+
     // Inspect the old graph to find clips that need to be killed
     if (info.nodeGraphToReplace != nullptr)
     {
@@ -261,6 +268,7 @@ void CombiningNode::prepareToPlay (const tracktion::graph::PlaybackInitialisatio
                                                     [id = itemID] (auto& cn) { return cn.itemID == id; }))
         {
             queueNoteOffsForClipsNoLongerPresent (*oldNode);
+            carryOverMidiNodeNotes (*oldNode);
         }
     }
 }
@@ -302,6 +310,33 @@ void CombiningNode::process (ProcessContext& pc)
 
     // Merge any note-offs from clips that have been deleted
     pc.buffers.midi.mergeFromAndClear (noteOffEventsToSend);
+
+    // ARLA (daw-stuck-notes): a jump already ends every note (PluginNode's all-notes-off), so the
+    // lists are stale; otherwise, on the first block after a rebuild, end what nothing still holds.
+    if (getPlayHeadState().didPlayheadJump())
+    {
+        for (auto n : midiNodes)
+            n->getActiveNoteList()->reset();
+
+        for (auto& o : orphanedNotes)
+            o.notes->reset();
+
+        endStaleNotesOnNextBlock = false;
+    }
+    else if (endStaleNotesOnNextBlock)
+    {
+        endStaleNotesOnNextBlock = false;
+
+        for (auto& o : orphanedNotes)
+        {
+            o.notes->iterate ([&] (int chan, int note)
+                              { pc.buffers.midi.addMidiMessage (juce::MidiMessage::noteOff (chan, note), 0.0, o.source); });
+            o.notes->reset();
+        }
+
+        for (auto n : midiNodes)
+            n->endNotesNoLongerHeld (pc.buffers.midi);
+    }
 
     // Then process the list
     if (auto g = groups[combining_node_utils::timeToGroupIndex (getEditTimeRange().getStart())])
@@ -383,6 +418,30 @@ void CombiningNode::queueNoteOffsForClipsNoLongerPresent (const CombiningNode& o
             }
         }
     }
+}
+
+void CombiningNode::carryOverMidiNodeNotes (const CombiningNode& replaced)
+{
+    for (auto oldMidiNode : replaced.midiNodes)
+    {
+        const auto id = oldMidiNode->getNodeProperties().nodeID;
+        auto found = std::find_if (midiNodes.begin(), midiNodes.end(),
+                                   [id] (auto n) { return n->getNodeProperties().nodeID == id; });
+
+        // The same clip: the new node takes the very list the old one keeps writing to until the
+        // swap, so a note started in the old graph's last block is not missed.
+        if (found != midiNodes.end())
+            (*found)->adoptActiveNotes (*oldMidiNode);
+        else
+            orphanedNotes.push_back ({ oldMidiNode->getActiveNoteList(), oldMidiNode->getMPESourceID() });
+    }
+
+    // A rebuild that replaces a graph before it played a block must not drop its orphans.
+    for (auto& o : replaced.orphanedNotes)
+        if (o.notes->areAnyNotesActive())
+            orphanedNotes.push_back (o);
+
+    endStaleNotesOnNextBlock = true;
 }
 
 } // namespace tracktion::inline engine

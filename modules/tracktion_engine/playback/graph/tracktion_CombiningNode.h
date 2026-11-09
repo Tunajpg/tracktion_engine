@@ -10,6 +10,8 @@
 
 namespace tracktion::inline engine {
 
+class MidiNode; // this engine's clip node, not tracktion::graph::MidiNode
+
 /** An Node that mixes a sequence of clips of other nodes.
 
     This node takes a set of input Nodes with associated start + end times,
@@ -72,6 +74,14 @@ private:
     std::atomic<bool> isReadyToProcessBlock { false };
     choc::buffer::ChannelArrayBuffer<float> tempAudioBuffer;
     MidiMessageArray noteOffEventsToSend;
+
+    // ARLA (daw-stuck-notes): carries the notes of this track's MidiNodes over a graph rebuild.
+    // All built in prepareToPlay (message thread), then only read on the audio thread.
+    struct OrphanedNotes { std::shared_ptr<ActiveNoteList> notes; MPESourceID source; };
+    std::vector<MidiNode*> midiNodes;           // every MidiNode input
+    std::vector<OrphanedNotes> orphanedNotes;   // notes of MidiNodes the rebuild removed
+    bool endStaleNotesOnNextBlock = false;
+    void carryOverMidiNodeNotes (const CombiningNode& replaced);
 
     tracktion::graph::NodeProperties nodeProperties;
 

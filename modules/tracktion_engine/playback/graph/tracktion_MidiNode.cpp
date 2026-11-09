@@ -130,6 +130,7 @@ void MidiNode::processSection (Node::ProcessContext& pc,
         {
             wasMute = mute;
             MidiNodeHelpers::createNoteOffs (pc.buffers.midi, sequence, midiSourceID, localTime.getStart(), {}, getPlayHead().isPlaying());
+            activeNotes->reset();
         }
 
         return;
@@ -204,6 +205,40 @@ void MidiNode::processSection (Node::ProcessContext& pc,
    #if TRACKTION_SANITY_CHECK_MIDI_BUFFERS
     MidiNodeHelpers::sanityCheckMidiBuffer (pc.buffers.midi, localTime.getLength());
    #endif
+
+    // ARLA (daw-stuck-notes): pc.buffers.midi is this node's own output, so it holds exactly what
+    // this block sent.
+    for (auto& m : pc.buffers.midi)
+    {
+        if (m.isNoteOn())
+            activeNotes->startNote (m.getChannel(), m.getNoteNumber());
+        else if (m.isNoteOff())
+            activeNotes->clearNote (m.getChannel(), m.getNoteNumber());
+        else if (m.isAllNotesOff() || m.isAllSoundOff())
+            activeNotes->reset();
+    }
+}
+
+void MidiNode::endNotesNoLongerHeld (MidiMessageArray& destination)
+{
+    if (! activeNotes->areAnyNotesActive())
+        return;
+
+    const double now = timeBase == MidiList::TimeBase::beats ? getEditBeatRange().getStart().inBeats() - editRange.getStart()
+                                                              : getEditTimeRange().getStart().inSeconds() - editRange.getStart();
+    const bool insideClip = ! ms.empty() && now >= 0.0 && now < editRange.getLength() && ! clipLevel.isMute();
+    activeNotes->iterate ([&] (int channel, int noteNumber)
+    {
+        if (insideClip)
+            for (auto meh : ms[currentSequence]) // a linear scan, once per rebuild
+                if (meh->noteOffObject != nullptr && meh->message.isNoteOn()
+                    && meh->message.getChannel() == channel && meh->message.getNoteNumber() == noteNumber
+                    && meh->message.getTimeStamp() < now && meh->noteOffObject->message.getTimeStamp() > now)
+                    return; // still held: the new sequence's own note-off ends it
+
+        destination.addMidiMessage (juce::MidiMessage::noteOff (channel, noteNumber), 0.0, midiSourceID);
+        activeNotes->clearNote (channel, noteNumber);
+    });
 }
 
 
